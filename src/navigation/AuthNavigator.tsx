@@ -36,46 +36,53 @@ import SubscriptionScreen from '../screens/auth/SubscriptionScreen';
 import BottomTabs from './BottomTabs';
 import PaymentScreen from '../screens/auth/PaymentScreen';
 
+import {SignupFlowProvider} from '../context/SignupFlowContext';
+
 const Stack = createNativeStackNavigator();
 
 export default function AuthNavigator() {
   return (
-    <Stack.Navigator screenOptions={{headerShown: false}}>
-      <Stack.Screen name="SplashScreen" component={SplashScreen} />
-      <Stack.Screen name="LanguageScreen" component={LanguageScreen} />
-      <Stack.Screen name="BismilaScreen" component={BismilaScreen} />
-      <Stack.Screen name="LoginScreen" component={LoginScreen} />
-      <Stack.Screen name="RecoverScreen" component={RecoverScreen} />
-      <Stack.Screen name="SignupScreen" component={SignupScreen} />
-      <Stack.Screen name="VerifyEmail" component={VerifyEmail} />
-      <Stack.Screen name="OtpScreen" component={OtpScreen} />
-      <Stack.Screen name="GenderScreen" component={GenderScreen} />
-      <Stack.Screen name="IdentityScreen" component={IdentityScreen} />
-      <Stack.Screen name="DobScreen" component={DobScreen} />
-      <Stack.Screen name="SelectCountry" component={SelectCountry} />
-      <Stack.Screen name="IdentityScreen2" component={IdentityScreen2} />
-      <Stack.Screen name="IdentityScreen3" component={IdentityScreen3} />
-      <Stack.Screen name="IdentityScreen4" component={IdentityScreen4} />
-      <Stack.Screen name="IdentityScreen5" component={IdentityScreen5} />
-      <Stack.Screen name="BodyType" component={BodyType} />
-      <Stack.Screen name="BodyTypeTwo" component={BodyTypeTwo} />
-      <Stack.Screen name="ReligionType" component={ReligionType} />
-      <Stack.Screen name="MetrialType" component={MetrialType} />
-      <Stack.Screen name="BodyTypeThree" component={BodyTypeThree} />
-      <Stack.Screen name="BodyTypeFour" component={BodyTypeFour} />
-      <Stack.Screen name="PhotoUpload" component={PhotoUpload} />
-      <Stack.Screen name="FaceVerify" component={FaceVerify} />
-      <Stack.Screen name="FaceVerifyTwo" component={FaceVerifyTwo} />
-      <Stack.Screen name="BestMatch" component={BestMatch} />
-      <Stack.Screen name="BusinessSignup" component={BusinessSignup} />
-      <Stack.Screen name="BusOtpScreen" component={BusOtpScreen} />
-      <Stack.Screen name="BusVerifyEmail" component={BusVerifyEmail} />
-      <Stack.Screen name="BusMobileScreen" component={BusMobileScreen} />
-      <Stack.Screen name="BusOtpScreen2" component={BusOtpScreen2} />
-      <Stack.Screen name="SubscriptionScreen" component={SubscriptionScreen} />
-      <Stack.Screen name="PaymentScreen" component={PaymentScreen} />
+    <SignupFlowProvider>
+      <Stack.Navigator screenOptions={{headerShown: false}}>
+        <Stack.Screen name="SplashScreen" component={SplashScreen} />
+        <Stack.Screen name="LanguageScreen" component={LanguageScreen} />
+        <Stack.Screen name="BismilaScreen" component={BismilaScreen} />
+        <Stack.Screen name="LoginScreen" component={LoginScreen} />
+        <Stack.Screen name="RecoverScreen" component={RecoverScreen} />
+        <Stack.Screen name="SignupScreen" component={SignupScreen} />
+        <Stack.Screen name="VerifyEmail" component={VerifyEmail} />
+        <Stack.Screen name="OtpScreen" component={OtpScreen} />
+        <Stack.Screen name="GenderScreen" component={GenderScreen} />
+        <Stack.Screen name="IdentityScreen" component={IdentityScreen} />
+        <Stack.Screen name="DobScreen" component={DobScreen} />
+        <Stack.Screen name="SelectCountry" component={SelectCountry} />
+        <Stack.Screen name="IdentityScreen2" component={IdentityScreen2} />
+        <Stack.Screen name="IdentityScreen3" component={IdentityScreen3} />
+        <Stack.Screen name="IdentityScreen4" component={IdentityScreen4} />
+        <Stack.Screen name="IdentityScreen5" component={IdentityScreen5} />
+        <Stack.Screen name="BodyType" component={BodyType} />
+        <Stack.Screen name="BodyTypeTwo" component={BodyTypeTwo} />
+        <Stack.Screen name="ReligionType" component={ReligionType} />
+        <Stack.Screen name="MetrialType" component={MetrialType} />
+        <Stack.Screen name="BodyTypeThree" component={BodyTypeThree} />
+        <Stack.Screen name="BodyTypeFour" component={BodyTypeFour} />
+        <Stack.Screen name="PhotoUpload" component={PhotoUpload} />
+        <Stack.Screen name="FaceVerify" component={FaceVerify} />
+        <Stack.Screen name="FaceVerifyTwo" component={FaceVerifyTwo} />
+        <Stack.Screen name="BestMatch" component={BestMatch} />
+        <Stack.Screen name="BusinessSignup" component={BusinessSignup} />
+        <Stack.Screen name="BusOtpScreen" component={BusOtpScreen} />
+        <Stack.Screen name="BusVerifyEmail" component={BusVerifyEmail} />
+        <Stack.Screen name="BusMobileScreen" component={BusMobileScreen} />
+        <Stack.Screen name="BusOtpScreen2" component={BusOtpScreen2} />
+        <Stack.Screen
+          name="SubscriptionScreen"
+          component={SubscriptionScreen}
+        />
+        <Stack.Screen name="PaymentScreen" component={PaymentScreen} />
 
-      <Stack.Screen name="BottomTabs" component={BottomTabs} />
-    </Stack.Navigator>
+        <Stack.Screen name="BottomTabs" component={BottomTabs} />
+      </Stack.Navigator>
+    </SignupFlowProvider>
   );
 }

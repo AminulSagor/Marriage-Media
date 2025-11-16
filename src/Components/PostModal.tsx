@@ -1,5 +1,4 @@
-// PostModal.js
-import React from 'react';
+import React, {useState, useEffect} from 'react';
 import {
   Modal,
   View,
@@ -7,44 +6,116 @@ import {
   StyleSheet,
   TextInput,
   TouchableOpacity,
+  Image,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
+import {launchImageLibrary, Asset} from 'react-native-image-picker';
+import type {PostImageFile} from '../api/posts'; // adjust path
 
-const PostModal = ({visible, onClose, onPost}) => {
+interface PostModalProps {
+  visible: boolean;
+  onClose: () => void;
+  onPost: (caption: string, image?: PostImageFile | null) => void;
+  isPosting?: boolean;
+}
+
+const PostModal: React.FC<PostModalProps> = ({
+  visible,
+  onClose,
+  onPost,
+  isPosting = false,
+}) => {
+  const [caption, setCaption] = useState('');
+  const [selectedImage, setSelectedImage] = useState<PostImageFile | null>(
+    null,
+  );
+
+  // 🔥 Reset fields whenever modal is closed (including after successful post)
+  useEffect(() => {
+    if (!visible) {
+      setCaption('');
+      setSelectedImage(null);
+    }
+  }, [visible]);
+
+  const handlePickImage = () => {
+    launchImageLibrary({mediaType: 'photo', selectionLimit: 1}, res => {
+      if (res.didCancel || res.errorCode) return;
+      const asset: Asset | undefined = res.assets?.[0];
+      if (asset?.uri) {
+        setSelectedImage({
+          uri: asset.uri,
+          name: asset.fileName ?? 'post.jpg',
+          type: asset.type ?? 'image/jpeg',
+        });
+      }
+    });
+  };
+
+  const handlePost = () => {
+    if (isPosting) return;
+    onPost(caption.trim(), selectedImage);
+  };
+
+  const handleClose = () => {
+    onClose(); // state reset handled by useEffect when visible -> false
+  };
+
   return (
     <Modal
       transparent
       visible={visible}
       animationType="fade"
-      onRequestClose={onClose}>
-      <View style={styles.overlay}>
-        <View style={styles.modalContainer}>
-          <Text style={styles.title}>Create a post</Text>
+      onRequestClose={handleClose}>
+      <TouchableWithoutFeedback onPress={handleClose}>
+        <View style={styles.overlay}>
+          <TouchableWithoutFeedback onPress={() => {}}>
+            <View style={styles.modalContainer}>
+              <Text style={styles.title}>Create a post</Text>
 
-          <TextInput
-            placeholder="write something for your post.."
-            placeholderTextColor="#aaa"
-            style={styles.input}
-            multiline
-          />
+              <TextInput
+                placeholder="write something for your post.."
+                placeholderTextColor="#aaa"
+                style={styles.input}
+                multiline
+                value={caption}
+                onChangeText={setCaption}
+              />
 
-          <View style={styles.iconRow}>
-            <TouchableOpacity style={styles.iconBox}>
-              <Icon name="image" size={20} color="#f47ca0" />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.iconBox}>
-              <Icon name="video" size={20} color="#f47ca0" />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.iconBox}>
-              <Icon name="smile" size={20} color="#f47ca0" />
-            </TouchableOpacity>
-          </View>
+              {selectedImage?.uri ? (
+                <Image
+                  source={{uri: selectedImage.uri}}
+                  style={styles.preview}
+                />
+              ) : null}
 
-          <TouchableOpacity style={styles.postButton} onPress={onPost}>
-            <Text style={styles.postText}>Post</Text>
-          </TouchableOpacity>
+              <View style={styles.iconRow}>
+                <TouchableOpacity
+                  style={styles.iconBox}
+                  onPress={handlePickImage}>
+                  <Icon name="image" size={20} color="#f47ca0" />
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.iconBox}>
+                  <Icon name="video" size={20} color="#f47ca0" />
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.iconBox}>
+                  <Icon name="smile" size={20} color="#f47ca0" />
+                </TouchableOpacity>
+              </View>
+
+              <TouchableOpacity
+                style={styles.postButton}
+                onPress={handlePost}
+                disabled={isPosting}>
+                <Text style={styles.postText}>
+                  {isPosting ? 'Posting...' : 'Post'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableWithoutFeedback>
         </View>
-      </View>
+      </TouchableWithoutFeedback>
     </Modal>
   );
 };
@@ -80,6 +151,14 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
     fontSize: 14,
     color: '#000',
+  },
+  preview: {
+    width: '100%',
+    height: 150,
+    borderRadius: 10,
+    marginTop: 8,
+    marginBottom: 4,
+    resizeMode: 'cover',
   },
   iconRow: {
     flexDirection: 'row',

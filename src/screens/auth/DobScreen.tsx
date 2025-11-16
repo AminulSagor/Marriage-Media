@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useState, useMemo} from 'react';
 import {
   View,
   Text,
@@ -6,10 +6,12 @@ import {
   StyleSheet,
   SafeAreaView,
   ImageBackground,
-  FlatList,
+  Modal,
+  ScrollView,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
-import {Modal, ScrollView} from 'react-native'; // add to imports
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import {useSignupFlow} from '../../context/SignupFlowContext';
 
 const months = [
   'January',
@@ -26,13 +28,24 @@ const months = [
   'December',
 ];
 
-const DobScreen = ({navigation}) => {
+interface DobScreenProps {
+  navigation: any;
+}
+
+const DobScreen: React.FC<DobScreenProps> = ({navigation}) => {
+  const insets = useSafeAreaInsets();
+  const {update} = useSignupFlow();
+
+  // Defaults (can be anything reasonable)
   const [selectedDate, setSelectedDate] = useState(4);
   const [selectedMonth, setSelectedMonth] = useState(5); // 0-indexed
   const [selectedYear, setSelectedYear] = useState(1995);
   const [showYearModal, setShowYearModal] = useState(false);
 
-  const daysInMonth = new Date(selectedYear, selectedMonth + 1, 0).getDate();
+  const daysInMonth = useMemo(
+    () => new Date(selectedYear, selectedMonth + 1, 0).getDate(),
+    [selectedYear, selectedMonth],
+  );
 
   const handlePrevMonth = () => {
     if (selectedMonth === 0) {
@@ -52,7 +65,7 @@ const DobScreen = ({navigation}) => {
     }
   };
 
-  const renderDay = day => (
+  const renderDay = (day: number) => (
     <TouchableOpacity
       key={day}
       onPress={() => setSelectedDate(day)}
@@ -71,24 +84,41 @@ const DobScreen = ({navigation}) => {
   );
 
   const renderCalendarDays = () => {
-    let days = [];
+    const days = [];
     for (let i = 1; i <= daysInMonth; i++) {
       days.push(renderDay(i));
     }
     return days;
   };
 
+  const handleConfirm = () => {
+    // Build YYYY-MM-DD with padding
+    const mm = `${selectedMonth + 1}`.padStart(2, '0');
+    const dd = `${selectedDate}`.padStart(2, '0');
+    const dob = `${selectedYear}-${mm}-${dd}`;
+
+    update({dob: dob});
+
+    navigation.navigate('SelectCountry');
+  };
+
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.safeArea}>
       <ImageBackground
         source={require('../../assets/images/gender.png')}
-        style={styles.backgroundImage}
+        style={[styles.backgroundImage, {paddingTop: (insets.top || 12) + 8}]}
         resizeMode="cover">
-        <TouchableOpacity style={styles.backButton}>
-          <Icon name="chevron-back" size={24} color="#000" />
+        {/* Header */}
+        <View style={styles.headerRow}>
+          <TouchableOpacity
+            style={styles.backIconWrapper}
+            onPress={() => navigation.goBack()}>
+            <Icon name="chevron-back" size={24} color="#000" />
+          </TouchableOpacity>
           <Text style={styles.title}>Basic Identity</Text>
-        </TouchableOpacity>
+        </View>
 
+        {/* Content */}
         <View style={styles.content}>
           <Text style={styles.subtitle}>Your birth date ?</Text>
 
@@ -96,12 +126,14 @@ const DobScreen = ({navigation}) => {
             <TouchableOpacity onPress={handlePrevMonth}>
               <Icon name="chevron-back" size={24} color="#000" />
             </TouchableOpacity>
+
             <View style={styles.dateLabel}>
               <TouchableOpacity onPress={() => setShowYearModal(true)}>
                 <Text style={styles.yearText}>{selectedYear}</Text>
               </TouchableOpacity>
               <Text style={styles.monthText}>{months[selectedMonth]}</Text>
             </View>
+
             <TouchableOpacity onPress={handleNextMonth}>
               <Icon name="chevron-forward" size={24} color="#000" />
             </TouchableOpacity>
@@ -110,15 +142,18 @@ const DobScreen = ({navigation}) => {
           <View style={styles.calendarGrid}>{renderCalendarDays()}</View>
         </View>
 
+        {/* Confirm at bottom respecting safe area */}
         <TouchableOpacity
-          onPress={() => navigation.navigate('SelectCountry')}
-          style={styles.confirmButton}>
+          onPress={handleConfirm}
+          style={[styles.confirmButton, {bottom: (insets.bottom || 16) + 16}]}>
           <Text style={styles.confirmText}>Confirm</Text>
         </TouchableOpacity>
       </ImageBackground>
+
+      {/* Year picker modal */}
       <Modal
         visible={showYearModal}
-        transparent={true}
+        transparent
         animationType="fade"
         onRequestClose={() => setShowYearModal(false)}>
         <View style={styles.modalOverlay}>
@@ -158,7 +193,7 @@ const DobScreen = ({navigation}) => {
 export default DobScreen;
 
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
     backgroundColor: '#fff',
   },
@@ -166,29 +201,35 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 24,
   },
-  backButton: {
-    position: 'absolute',
-    top: 20,
-    left: 20,
-    zIndex: 10,
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 70,
+    marginBottom: 32,
   },
-  content: {
-    marginTop: 100,
+  backIconWrapper: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    borderWidth: 0.5,
+    borderColor: '#ccc',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+    backgroundColor: '#fff',
   },
   title: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: 'bold',
-    alignSelf: 'center',
-    marginBottom: 10,
+    color: '#000',
+  },
+  content: {
+    flex: 1,
   },
   subtitle: {
     fontSize: 18,
     fontWeight: '600',
-    textAlign: 'center',
-    marginBottom: 30,
+    marginBottom: 24,
+    color: '#000',
   },
   dateHeader: {
     flexDirection: 'row',
@@ -234,7 +275,6 @@ const styles = StyleSheet.create({
   },
   confirmButton: {
     position: 'absolute',
-    bottom: 30,
     left: 24,
     right: 24,
     backgroundColor: '#f472b6',

@@ -5,31 +5,52 @@ import {
   TouchableOpacity,
   StyleSheet,
   Image,
-  SafeAreaView,
   ScrollView,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import {Picker} from '@react-native-picker/picker';
+import {SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
+import {useSignupFlow} from '../../context/SignupFlowContext';
 
-const BodyTypeTwo = ({navigation}) => {
-  // Separate states for each dropdown
+interface BodyTypeTwoProps {
+  navigation: any;
+}
+
+const BodyTypeTwo: React.FC<BodyTypeTwoProps> = ({navigation}) => {
+  const insets = useSafeAreaInsets();
+  const {data, update} = useSignupFlow();
   const [religion, setReligion] = useState('');
   const [sect, setSect] = useState('');
   const [prayer, setPrayer] = useState('');
   const [dressCode, setDressCode] = useState('');
   const [diet, setDiet] = useState('');
+  console.log(data);
+  const goNext = () => {
+    update({
+      religion: religion || undefined,
+      religion_section: sect || undefined,
+      prayer_frequency: prayer || undefined,
+      dress_code: dressCode || undefined,
+      dietary_preference: diet || undefined,
+    });
+    navigation.navigate('BodyTypeThree');
+  };
+
+  const handleSkip = () => {
+    navigation.navigate('BodyTypeThree');
+  };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
           <Icon name="chevron-back" size={24} color="#000" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>
           Add more details to attract the right matches
         </Text>
-        <TouchableOpacity>
+        <TouchableOpacity onPress={handleSkip}>
           <Text style={styles.skipText}>Skip</Text>
         </TouchableOpacity>
       </View>
@@ -40,17 +61,20 @@ const BodyTypeTwo = ({navigation}) => {
         style={styles.sidebarImage}
       />
 
-      {/* Content Row */}
+      {/* Content */}
       <View style={styles.bodyRow}>
         <View style={styles.contentWrapper}>
           <ScrollView
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.scrollContent}>
+            contentContainerStyle={{
+              paddingBottom: (insets.bottom || 16) + 90, // room for fixed button
+            }}>
             <Text style={styles.sectionTitle}>Religious Identity</Text>
 
             {/* Religion */}
             <View style={styles.pickerContainer}>
               <Picker
+                mode="dropdown"
                 selectedValue={religion}
                 style={styles.picker}
                 dropdownIconColor="#999"
@@ -68,6 +92,7 @@ const BodyTypeTwo = ({navigation}) => {
             {/* Sect */}
             <View style={styles.pickerContainer}>
               <Picker
+                mode="dropdown"
                 selectedValue={sect}
                 style={styles.picker}
                 dropdownIconColor="#999"
@@ -85,6 +110,7 @@ const BodyTypeTwo = ({navigation}) => {
             {/* Prayer Frequency */}
             <View style={styles.pickerContainer}>
               <Picker
+                mode="dropdown"
                 selectedValue={prayer}
                 style={styles.picker}
                 dropdownIconColor="#999"
@@ -102,6 +128,7 @@ const BodyTypeTwo = ({navigation}) => {
             {/* Dress Code */}
             <View style={styles.pickerContainer}>
               <Picker
+                mode="dropdown"
                 selectedValue={dressCode}
                 style={styles.picker}
                 dropdownIconColor="#999"
@@ -117,6 +144,7 @@ const BodyTypeTwo = ({navigation}) => {
             {/* Diet */}
             <View style={styles.pickerContainer}>
               <Picker
+                mode="dropdown"
                 selectedValue={diet}
                 style={styles.picker}
                 dropdownIconColor="#999"
@@ -130,26 +158,21 @@ const BodyTypeTwo = ({navigation}) => {
                 <Picker.Item label="Kosher" value="Kosher" />
               </Picker>
             </View>
-
-            <TouchableOpacity
-              onPress={() =>
-                navigation?.navigate('BodyTypeThree', {
-                  religion,
-                  sect,
-                  prayer,
-                  dressCode,
-                  diet,
-                })
-              }
-              style={styles.confirmButton}>
-              <Text style={styles.confirmText}>Confirm</Text>
-            </TouchableOpacity>
           </ScrollView>
         </View>
       </View>
+
+      {/* Fixed Confirm Button */}
+      <TouchableOpacity
+        onPress={goNext}
+        style={[styles.confirmButton, {bottom: (insets.bottom || 16) + 16}]}>
+        <Text style={styles.confirmText}>Confirm</Text>
+      </TouchableOpacity>
     </SafeAreaView>
   );
 };
+
+export default BodyTypeTwo;
 
 const styles = StyleSheet.create({
   container: {flex: 1, backgroundColor: '#fff'},
@@ -157,7 +180,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     backgroundColor: '#fff',
   },
   headerTitle: {
@@ -176,8 +200,8 @@ const styles = StyleSheet.create({
     height: 80,
     alignSelf: 'center',
   },
-  contentWrapper: {flex: 1, padding: 16, paddingBottom: 0},
-  scrollContent: {paddingBottom: 20},
+  contentWrapper: {flex: 1, paddingHorizontal: 16},
+  scrollContent: {},
   sectionTitle: {
     fontSize: 20,
     fontWeight: 'bold',
@@ -193,17 +217,16 @@ const styles = StyleSheet.create({
     marginTop: 10,
     justifyContent: 'center',
   },
-  picker: {color: '#333', fontSize: 14, flex: 1},
+  picker: {color: '#333', flex: 1},
   confirmButton: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
     backgroundColor: '#FF4081',
     paddingVertical: 14,
-    marginTop: 20,
     borderRadius: 12,
     alignItems: 'center',
-    marginBottom: 20,
-    marginHorizontal: 4,
+    elevation: 5,
   },
   confirmText: {color: '#fff', fontWeight: 'bold', fontSize: 16},
 });
-
-export default BodyTypeTwo;

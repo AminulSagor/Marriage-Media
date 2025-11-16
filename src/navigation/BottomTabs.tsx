@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
+import {BottomTabParamList} from './types';
 
 // Your screen components
 import ProfileTab from './ProfileTab';
@@ -18,7 +19,7 @@ import HeartTab from './HeartTab';
 import HomeTab from './HomeTab';
 import {getFocusedRouteNameFromRoute, Route} from '@react-navigation/native';
 
-const Tab = createBottomTabNavigator();
+const Tab = createBottomTabNavigator<BottomTabParamList>();
 
 const getTabBarVisibility = (route: Partial<Route<string>>) => {
   const routeName = getFocusedRouteNameFromRoute(route) ?? 'EventsScreen';

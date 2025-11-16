@@ -10,13 +10,22 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import {launchImageLibrary} from 'react-native-image-picker';
+import {SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
+import {useSignupFlow} from '../../context/SignupFlowContext';
 
-const PhotoUpload = ({navigation}) => {
-  const [images, setImages] = useState([null, null, null]);
+interface PhotoUploadProps {
+  navigation: any;
+}
+
+const PhotoUpload: React.FC<PhotoUploadProps> = ({navigation}) => {
+  const insets = useSafeAreaInsets();
+  const {data, update} = useSignupFlow();
+
+  const [images, setImages] = useState<(any | null)[]>([null, null, null]);
   const [blur, setBlur] = useState(false);
-  const [privacy, setPrivacy] = useState('public'); // public | private
+  const [privacy, setPrivacy] = useState<'public' | 'private'>('public');
 
-  const pickImage = index => {
+  const pickImage = (index: number) => {
     launchImageLibrary(
       {
         mediaType: 'photo',
@@ -25,30 +34,37 @@ const PhotoUpload = ({navigation}) => {
       response => {
         if (response.didCancel) return;
         if (response.errorCode) {
-          Alert.alert('Error', response.errorMessage);
-        } else {
-          const newImages = [...images];
-          newImages[index] = response.assets[0];
-          setImages(newImages);
+          Alert.alert('Error', response.errorMessage || 'Image pick failed');
+          return;
         }
+        const asset = response.assets?.[0];
+        if (!asset?.uri) return;
+
+        const next = [...images];
+        next[index] = asset;
+        setImages(next);
       },
     );
   };
-
+  console.log(data);
   const confirmUpload = () => {
-    const uploaded = images.filter(img => img !== null);
+    const uploaded = images.filter(Boolean);
     if (uploaded.length < 3) {
-      Alert.alert('Please upload at least 3 photos');
+      Alert.alert('Hold on', 'Please upload at least 3 photos.');
       return;
     }
-    Alert.alert(
-      'Success',
-      `Photos uploaded (${privacy === 'public' ? 'Public' : 'Private'})!`,
-    );
-    navigation?.navigate('FaceVerify');
+
+    update({
+      pro_path: images[0],
+      image_one: images[1],
+      image_two: images[2],
+      // blur_photos: blur,
+      // privacy: privacy,
+    });
+    navigation.navigate('FaceVerify');
   };
 
-  const renderUploadBox = (index, style) => (
+  const renderUploadBox = (index: number, style?: any) => (
     <TouchableOpacity
       key={index}
       style={[styles.uploadBox, style]}
@@ -56,108 +72,124 @@ const PhotoUpload = ({navigation}) => {
       activeOpacity={0.9}>
       {images[index] ? (
         <Image
-          source={{uri: images[index].uri}}
+          source={{uri: (images[index] as any).uri}}
           style={styles.image}
           blurRadius={blur ? 8 : 0}
         />
       ) : (
         <>
           <Icon name="cloud-upload-outline" size={28} color="#999" />
-          <Text style={styles.uploadText}>upload at least 3 photo</Text>
+          <Text style={styles.uploadText}>Upload at least 3 photos</Text>
         </>
       )}
     </TouchableOpacity>
   );
 
   return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton}>
-          <Icon name="chevron-back" size={28} color="#000" />
-        </TouchableOpacity>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+      <View style={styles.container}>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}>
+            <Icon name="chevron-back" size={24} color="#000" />
+          </TouchableOpacity>
 
+          <TouchableOpacity
+            style={styles.blurToggle}
+            onPress={() => setBlur(prev => !prev)}>
+            <Icon
+              name={blur ? 'checkbox' : 'square-outline'}
+              size={18}
+              color="#f43f5e"
+            />
+            <Text style={styles.blurText}>Blur photos</Text>
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={[
+            styles.scrollContent,
+            {paddingBottom: (insets.bottom || 16) + 90}, // space for button
+          ]}>
+          {/* Title */}
+          <Text style={styles.title}>Upload your photo</Text>
+
+          {/* Main large photo */}
+          {renderUploadBox(0, styles.largeBox)}
+
+          {/* Public option */}
+          <View style={styles.radioContainer}>
+            <TouchableOpacity
+              style={styles.radioOption}
+              onPress={() => setPrivacy('public')}>
+              <Icon
+                name={
+                  privacy === 'public' ? 'radio-button-on' : 'radio-button-off'
+                }
+                size={18}
+                color="#f43f5e"
+              />
+              <Text style={styles.radioText}>This photo will be public</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Two smaller photos */}
+          <View style={styles.row}>
+            {renderUploadBox(1, styles.smallBox)}
+            {renderUploadBox(2, styles.smallBox)}
+          </View>
+
+          {/* Private option */}
+          <View style={styles.radioContainer}>
+            <TouchableOpacity
+              style={styles.radioOption}
+              onPress={() => setPrivacy('private')}>
+              <Icon
+                name={
+                  privacy === 'private' ? 'radio-button-on' : 'radio-button-off'
+                }
+                size={18}
+                color="#f43f5e"
+              />
+              <Text style={styles.radioText}>Keep these photos private</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+
+        {/* Confirm Button pinned above bottom inset */}
         <TouchableOpacity
-          style={styles.blurToggle}
-          onPress={() => setBlur(!blur)}>
-          <Icon
-            name={blur ? 'checkbox' : 'square-outline'}
-            size={18}
-            color="#f43f5e"
-          />
-          <Text style={styles.blurText}>Blur photos</Text>
+          style={[styles.confirmButton, {bottom: (insets.bottom || 16) + 16}]}
+          onPress={confirmUpload}>
+          <Text style={styles.confirmText}>Confirm</Text>
         </TouchableOpacity>
       </View>
-
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{paddingBottom: 120}}>
-        {/* Title */}
-        <Text style={styles.title}>Upload your photo</Text>
-
-        {/* Upload Boxes */}
-        {renderUploadBox(0, styles.largeBox)}
-
-        {/* Privacy options */}
-        <View style={styles.radioContainer}>
-          <TouchableOpacity
-            style={styles.radioOption}
-            onPress={() => setPrivacy('public')}>
-            <Icon
-              name={
-                privacy === 'public' ? 'radio-button-on' : 'radio-button-off'
-              }
-              size={18}
-              color="#f43f5e"
-            />
-            <Text style={styles.radioText}>This photo will be public</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.row}>
-          {renderUploadBox(1, styles.smallBox)}
-          {renderUploadBox(2, styles.smallBox)}
-        </View>
-
-        <View style={styles.radioContainer}>
-          <TouchableOpacity
-            style={styles.radioOption}
-            onPress={() => setPrivacy('private')}>
-            <Icon
-              name={
-                privacy === 'private' ? 'radio-button-on' : 'radio-button-off'
-              }
-              size={18}
-              color="#f43f5e"
-            />
-            <Text style={styles.radioText}>Keep these photos private</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-
-      {/* Confirm Button */}
-      <TouchableOpacity style={styles.confirmButton} onPress={confirmUpload}>
-        <Text style={styles.confirmText}>Confirm</Text>
-      </TouchableOpacity>
-    </View>
+    </SafeAreaView>
   );
 };
 
 export default PhotoUpload;
 
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
     backgroundColor: '#fff',
+  },
+  container: {
+    flex: 1,
     paddingHorizontal: 20,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 10,
   },
-  backButton: {padding: 5},
+  backButton: {
+    paddingVertical: 6,
+    paddingRight: 10,
+  },
   blurToggle: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -168,11 +200,15 @@ const styles = StyleSheet.create({
     color: '#000',
     fontWeight: '500',
   },
+  scrollContent: {
+    paddingTop: 12,
+  },
   title: {
     fontSize: 22,
     fontWeight: '700',
-    marginVertical: 20,
+    marginBottom: 16,
     alignSelf: 'flex-start',
+    color: '#000',
   },
   uploadBox: {
     borderWidth: 1,
@@ -208,7 +244,6 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     resizeMode: 'cover',
-    borderRadius: 16,
   },
   radioContainer: {
     marginVertical: 8,
@@ -224,13 +259,13 @@ const styles = StyleSheet.create({
   },
   confirmButton: {
     position: 'absolute',
-    bottom: 20,
     left: 20,
     right: 20,
     backgroundColor: '#f43f5e',
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
+    elevation: 4,
   },
   confirmText: {
     color: '#fff',

@@ -1,8 +1,8 @@
-import { NavigationProp } from '@react-navigation/native';
+import {NavigationProp} from '@react-navigation/native';
 
 export type RootStackParamList = {
   Auth: undefined;
-  MainTabs: undefined;
+  BottomTabs: undefined; // was MainTabs
 };
 
 export type AuthStackParamList = {
@@ -11,12 +11,14 @@ export type AuthStackParamList = {
   Signup: undefined;
 };
 
-export type TabParamList = {
-  Home: undefined;
-  Profile: undefined;
-  Settings: undefined;
+export type BottomTabParamList = {
+  ProfileTab: undefined;
+  ChatTab: undefined;
+  WorldTab: undefined;
+  HeartTab: undefined;
+  HomeTab: undefined;
 };
 
 export type RootNavigation = NavigationProp<RootStackParamList>;
 export type AuthNavigation = NavigationProp<AuthStackParamList>;
-export type TabNavigation = NavigationProp<TabParamList>;
+export type TabNavigation = NavigationProp<BottomTabParamList>;

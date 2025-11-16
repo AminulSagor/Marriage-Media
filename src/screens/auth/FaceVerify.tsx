@@ -1,42 +1,34 @@
-import React, {useState} from 'react';
+import React from 'react';
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   StyleSheet,
-  FlatList,
   ImageBackground,
-  SafeAreaView,
 } from 'react-native';
-import Icon from 'react-native-vector-icons/Ionicons';
+import {SafeAreaView} from 'react-native-safe-area-context';
+import {useSignupFlow} from '../../context/SignupFlowContext';
 
-const COUNTRIES = [
-  'High School',
-  'Bachelor’s Degree',
-  'Master’s Degree',
-  'PhD',
-  'Other',
-];
+interface FaceVerifyProps {
+  navigation: any;
+}
 
-const FaceVerify = ({navigation}) => {
-  const [search, setSearch] = useState('');
-  const [selected, setSelected] = useState(null);
+const FaceVerify: React.FC<FaceVerifyProps> = ({navigation}) => {
+  //for log only
+  const {data} = useSignupFlow();
+  console.log(data);
 
-  const filteredCountries = COUNTRIES.filter(item =>
-    item.toLowerCase().includes(search.toLowerCase()),
-  );
+  const handleConfirm = () => {
+    navigation?.navigate('FaceVerifyTwo');
+  };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <ImageBackground
         source={require('../../assets/images/neww.png')}
         style={styles.background}
         resizeMode="cover">
-        {/* Confirm Button */}
-        <TouchableOpacity
-          onPress={() => navigation?.navigate('FaceVerifyTwo')}
-          style={styles.confirmButton}>
+        <TouchableOpacity onPress={handleConfirm} style={styles.confirmButton}>
           <Text style={styles.confirmText}>Confirm</Text>
         </TouchableOpacity>
       </ImageBackground>
@@ -54,82 +46,6 @@ const styles = StyleSheet.create({
   background: {
     flex: 1,
     paddingHorizontal: 24,
-  },
-  backButton: {
-    position: 'absolute',
-    top: 20,
-    left: 20,
-    zIndex: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 70,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    alignSelf: 'center',
-    color: '#000',
-  },
-  subtitle: {
-    fontSize: 28,
-    fontWeight: '600',
-    marginBottom: 20,
-    color: '#000',
-    marginTop: 100,
-  },
-  searchBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    marginBottom: 20,
-  },
-  searchIcon: {
-    marginRight: 8,
-  },
-  searchInput: {
-    flex: 1,
-    height: 44,
-    color: '#000',
-  },
-  listBox: {
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    maxHeight: 250,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-  },
-  listItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 0.5,
-    borderColor: '#eee',
-  },
-  countryText: {
-    fontSize: 16,
-    color: '#000',
-  },
-  radioCircle: {
-    height: 20,
-    width: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: '#f472b6',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  selectedDot: {
-    height: 10,
-    width: 10,
-    borderRadius: 5,
-    backgroundColor: '#f472b6',
   },
   confirmButton: {
     position: 'absolute',

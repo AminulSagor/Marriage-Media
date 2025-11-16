@@ -9,6 +9,7 @@ import {
   ImageBackground,
   Modal,
 } from 'react-native';
+import {logout} from '../../api/auth';
 import Icon from 'react-native-vector-icons/Ionicons';
 import MaterialIcon from 'react-native-vector-icons/MaterialCommunityIcons';
 
@@ -19,10 +20,17 @@ const SettingsScreen = ({navigation}) => {
   const [logoutModal, setLogoutModal] = React.useState(false);
   const [audioMute, setAudioMute] = React.useState(false);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setLogoutModal(false);
 
-    navigation?.navigate('LoginScreen');
+    await logout();
+
+    const rootNav = navigation.getParent()?.getParent() ?? navigation;
+
+    rootNav.reset({
+      index: 0,
+      routes: [{name: 'Auth'}],
+    });
   };
 
   const renderItem = (

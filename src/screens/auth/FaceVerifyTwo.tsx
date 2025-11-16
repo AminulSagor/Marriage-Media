@@ -5,11 +5,15 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  FlatList,
   ImageBackground,
   SafeAreaView,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
+import {useSignupFlow} from '../../context/SignupFlowContext';
+
+interface FaceVerifyTwoProps {
+  navigation: any;
+}
 
 const COUNTRIES = [
   'High School',
@@ -19,13 +23,25 @@ const COUNTRIES = [
   'Other',
 ];
 
-const FaceVerifyTwo = ({navigation}) => {
+const FaceVerifyTwo: React.FC<FaceVerifyTwoProps> = ({navigation}) => {
   const [search, setSearch] = useState('');
-  const [selected, setSelected] = useState(null);
+  const [selected, setSelected] = useState<string | null>(null);
 
+  const {data} = useSignupFlow();
+  console.log(data);
+
+  // (Search bits are currently unused visually; keeping for future if needed)
   const filteredCountries = COUNTRIES.filter(item =>
     item.toLowerCase().includes(search.toLowerCase()),
   );
+
+  const handleBack = () => {
+    navigation.goBack();
+  };
+
+  const handleConfirm = () => {
+    navigation?.navigate('BestMatch');
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -33,14 +49,14 @@ const FaceVerifyTwo = ({navigation}) => {
         source={require('../../assets/images/face1.png')}
         style={styles.background}
         resizeMode="cover">
-        <TouchableOpacity style={styles.backButton}>
+        {/* Back + Title */}
+        <TouchableOpacity style={styles.backButton} onPress={handleBack}>
           <Icon name="chevron-back" size={24} color="#000" />
           <Text style={styles.title}>Security</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          onPress={() => navigation?.navigate('BestMatch')}
-          style={styles.confirmButton}>
+        {/* Confirm */}
+        <TouchableOpacity onPress={handleConfirm} style={styles.confirmButton}>
           <Text style={styles.confirmText}>Confirm</Text>
         </TouchableOpacity>
       </ImageBackground>
@@ -73,67 +89,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     alignSelf: 'center',
     color: '#000',
-  },
-  subtitle: {
-    fontSize: 28,
-    fontWeight: '600',
-    marginBottom: 20,
-    color: '#000',
-    marginTop: 100,
-  },
-  searchBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    marginBottom: 20,
-  },
-  searchIcon: {
-    marginRight: 8,
-  },
-  searchInput: {
-    flex: 1,
-    height: 44,
-    color: '#000',
-  },
-  listBox: {
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    maxHeight: 250,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-  },
-  listItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 0.5,
-    borderColor: '#eee',
-  },
-  countryText: {
-    fontSize: 16,
-    color: '#000',
-  },
-  radioCircle: {
-    height: 20,
-    width: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: '#f472b6',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  selectedDot: {
-    height: 10,
-    width: 10,
-    borderRadius: 5,
-    backgroundColor: '#f472b6',
   },
   confirmButton: {
     position: 'absolute',

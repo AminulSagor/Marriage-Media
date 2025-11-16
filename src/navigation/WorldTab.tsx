@@ -6,6 +6,7 @@ import {SafeAreaView} from 'react-native';
 import WorldScreen from '../screens/main/WorldScreen';
 import WeddingServicesScreen from '../screens/main/WeddingServicesScreen';
 import OtherProfileScreen from '../screens/main/OtherProfileScreen';
+import BusinessListScreen from '../screens/main/BusinessListScreen';
 
 const Stack = createStackNavigator();
 const WorldTab = () => {
@@ -34,6 +35,11 @@ const WorldTab = () => {
           options={{headerShown: false}}
           name="OtherProfileScreen"
           component={OtherProfileScreen}
+        />
+        <Stack.Screen
+          name="BusinessListScreen"
+          component={BusinessListScreen}
+          options={{headerShown: false}}
         />
       </Stack.Navigator>
     </SafeAreaView>

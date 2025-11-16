@@ -2,30 +2,147 @@ import React, {useState} from 'react';
 import {
   View,
   Text,
-  TextInput,
-  TouchableOpacity,
   StyleSheet,
-  FlatList,
+  TouchableOpacity,
   ImageBackground,
   SafeAreaView,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
-import Icon from 'react-native-vector-icons/Ionicons';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import {useMutation} from '@tanstack/react-query';
+import {
+  registerUser,
+  RegisterPayload,
+  login,
+  LoginPayload,
+} from '../../api/auth';
+import {useSignupFlow} from '../../context/SignupFlowContext';
 
-const COUNTRIES = [
-  'High School',
-  'Bachelor’s Degree',
-  'Master’s Degree',
-  'PhD',
-  'Other',
-];
+interface BestMatchProps {
+  navigation: any;
+}
 
-const BestMatch = ({navigation}) => {
-  const [search, setSearch] = useState('');
-  const [selected, setSelected] = useState(null);
+const BestMatch: React.FC<BestMatchProps> = ({navigation}) => {
+  const insets = useSafeAreaInsets();
+  const {data, reset} = useSignupFlow(); // <- use your context
+  const [submitting, setSubmitting] = useState(false);
 
-  const filteredCountries = COUNTRIES.filter(item =>
-    item.toLowerCase().includes(search.toLowerCase()),
-  );
+  console.log(data);
+
+  const {
+    mutate: doRegister,
+    error: registerError,
+    isPending: isRegistering,
+  } = useMutation({
+    mutationFn: ({payload, otp}: {payload: RegisterPayload; otp?: string}) =>
+      registerUser(payload, otp),
+    onSuccess: async (_res, variables) => {
+      try {
+        // Auto-login with same credentials we registered with
+        const {email, password} = variables.payload as any;
+
+        if (!email || !password) {
+          throw new Error(
+            'Account created but missing credentials for auto login.',
+          );
+        }
+
+        const loginPayload: LoginPayload = {
+          email: String(email),
+          password: String(password),
+        };
+
+        await login(loginPayload);
+
+        // Clear signup flow data
+        reset();
+
+        // Go into main app
+        navigation.reset({
+          index: 0,
+          routes: [{name: 'BottomTabs' as never}],
+        });
+      } catch (err: any) {
+        const msg =
+          err?.message ||
+          err?.response?.data?.message ||
+          'Account created, but auto login failed. Please login manually.';
+        Alert.alert('Login', msg, [
+          {
+            text: 'OK',
+            onPress: () => {
+              navigation.reset({
+                index: 0,
+                routes: [{name: 'LoginScreen' as never}],
+              });
+            },
+          },
+        ]);
+      } finally {
+        setSubmitting(false);
+      }
+    },
+    onError: (err: any) => {
+      setSubmitting(false);
+      const msg =
+        err?.message ||
+        err?.response?.data?.message ||
+        'Failed to complete signup. Please try again.';
+      Alert.alert('Signup failed', msg);
+    },
+  });
+
+  const handleStart = () => {
+    if (submitting || isRegistering) return;
+
+    // data already includes everything collected + otp
+    const {otp, ...rest} = data;
+    const payload = rest as Partial<RegisterPayload>;
+
+    // Validate required fields based on your /users/create spec
+    const missing: string[] = [];
+    if (!payload.name) missing.push('name');
+    if (!payload.phone) missing.push('phone');
+    if (!payload.email) missing.push('email');
+    if (!payload.password) missing.push('password');
+    if (!payload.gender) missing.push('gender');
+    if (!payload.dob) missing.push('dob');
+    if (!payload.country) missing.push('country');
+    if (!payload.city) missing.push('city');
+    if (payload.partner_age_start === undefined)
+      missing.push('partner_age_start');
+    if (payload.partner_age_end === undefined) missing.push('partner_age_end');
+    if (!payload.pro_path || !payload.pro_path.uri)
+      missing.push('pro_path (profile image)');
+
+    if (missing.length) {
+      Alert.alert(
+        'Missing information',
+        `Some required fields are missing:\n- ${missing.join(
+          '\n- ',
+        )}\n\nPlease go back and complete all steps.`,
+      );
+      return;
+    }
+
+    setSubmitting(true);
+
+    doRegister({
+      payload: payload as RegisterPayload,
+      otp:
+        typeof otp === 'string' && otp.trim().length > 0
+          ? otp.trim()
+          : undefined,
+    });
+  };
+
+  const isBusy = submitting || isRegistering;
+
+  const inlineError =
+    (registerError as any)?.message ||
+    (registerError as any)?.response?.data?.message ||
+    '';
 
   return (
     <SafeAreaView style={styles.container}>
@@ -33,40 +150,33 @@ const BestMatch = ({navigation}) => {
         source={require('../../assets/images/best.png')}
         style={styles.background}
         resizeMode="cover">
-        {/* <TouchableOpacity style={styles.backButton}>
-          <Icon name="chevron-back" size={24} color="#000" />
-          <Text style={styles.title}>Security</Text>
-        </TouchableOpacity> */}
-        <View
-          style={{
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginTop: '130%',
-          }}>
-          <Text
-            style={{
-              fontSize: 20,
-              fontWeight: 'bold',
-              color: 'black',
-              width: 230,
-              textAlign: 'center',
-            }}>
-            Begin your halal journey to Nikah{' '}
-          </Text>
-          <Text
-            style={{
-              fontSize: 16,
-              color: 'black',
-              textAlign: 'center',
-              marginTop: 10,
-            }}>
-            with our app
-          </Text>
+        {/* Center message */}
+        <View style={styles.textWrapper}>
+          <Text style={styles.title}>Begin your halal journey to Nikah</Text>
+          <Text style={styles.subtitle}>with our app</Text>
         </View>
+
+        {/* Inline error if register failed */}
+        {!!inlineError && !isBusy && (
+          <View style={styles.errorBox}>
+            <Text style={styles.errorText}>{inlineError}</Text>
+          </View>
+        )}
+
+        {/* Final "Start" (finish signup) button */}
         <TouchableOpacity
-          onPress={() => navigation?.navigate('BusinessSignup')}
-          style={styles.confirmButton}>
-          <Text style={styles.confirmText}>Start</Text>
+          onPress={handleStart}
+          disabled={isBusy}
+          style={[
+            styles.confirmButton,
+            {bottom: (insets.bottom || 16) + 14},
+            isBusy && {opacity: 0.7},
+          ]}>
+          {isBusy ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.confirmText}>Start</Text>
+          )}
         </TouchableOpacity>
       </ImageBackground>
     </SafeAreaView>
@@ -84,85 +194,27 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 24,
   },
-  backButton: {
-    position: 'absolute',
-    top: 20,
-    left: 20,
-    zIndex: 10,
-    flexDirection: 'row',
+  textWrapper: {
+    flex: 1,
+    justifyContent: 'flex-end',
     alignItems: 'center',
-    gap: 70,
+    marginBottom: 140,
   },
   title: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: 'bold',
-    alignSelf: 'center',
-    color: '#000',
+    color: 'black',
+    width: 230,
+    textAlign: 'center',
   },
   subtitle: {
-    fontSize: 28,
-    fontWeight: '600',
-    marginBottom: 20,
-    color: '#000',
-    marginTop: 100,
-  },
-  searchBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    marginBottom: 20,
-  },
-  searchIcon: {
-    marginRight: 8,
-  },
-  searchInput: {
-    flex: 1,
-    height: 44,
-    color: '#000',
-  },
-  listBox: {
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    maxHeight: 250,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-  },
-  listItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 0.5,
-    borderColor: '#eee',
-  },
-  countryText: {
     fontSize: 16,
-    color: '#000',
-  },
-  radioCircle: {
-    height: 20,
-    width: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: '#f472b6',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  selectedDot: {
-    height: 10,
-    width: 10,
-    borderRadius: 5,
-    backgroundColor: '#f472b6',
+    color: 'black',
+    textAlign: 'center',
+    marginTop: 10,
   },
   confirmButton: {
     position: 'absolute',
-    bottom: 30,
     left: 24,
     right: 24,
     backgroundColor: '#FF3C7B',
@@ -175,5 +227,20 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
     fontSize: 16,
+  },
+  errorBox: {
+    position: 'absolute',
+    left: 24,
+    right: 24,
+    bottom: 100,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    backgroundColor: 'rgba(248,113,113,0.12)',
+    borderRadius: 8,
+  },
+  errorText: {
+    color: '#b91c1c',
+    fontSize: 12,
+    textAlign: 'center',
   },
 });

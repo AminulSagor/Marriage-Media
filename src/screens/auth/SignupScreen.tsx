@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {useState} from 'react';
 import {
   View,
   Text,
@@ -8,141 +8,214 @@ import {
   TouchableOpacity,
   ImageBackground,
   Image,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  TouchableWithoutFeedback,
+  Keyboard,
 } from 'react-native';
 
-export default function SignupScreen({navigation}) {
-  return (
-    <SafeAreaView style={styles.container}>
-      <ImageBackground
-        source={require('../../assets/images/signup.png')}
-        style={styles.imageBackground}>
-        {/* Log In Text */}
-        <Text style={styles.loginText}>Sign Up</Text>
+import {useSignupFlow} from '../../context/SignupFlowContext';
 
-        {/* Form */}
-        <View style={styles.inputContainer}>
-          {/* Email/Phone Input */}
-          <View style={styles.inputWrapper}>
-            <Image
-              source={require('../../assets/images/user.png')}
-              style={{width: 30, height: 30}}
-              resizeMode="contain"
-            />
-            <TextInput
-              placeholder="User name"
-              style={styles.input}
-              placeholderTextColor="#999"
-            />
-          </View>
-
-          {/* Password Input */}
-          <View style={styles.inputWrapper}>
-            <Image
-              source={require('../../assets/images/mail.png')}
-              style={{width: 30, height: 30}}
-              resizeMode="contain"
-            />
-            <TextInput
-              placeholder="Email"
-              style={styles.input}
-              placeholderTextColor="#999"
-              keyboardType="email-address"
-            />
-          </View>
-          <View style={styles.inputWrapper}>
-            <Image
-              source={require('../../assets/images/phone.png')}
-              style={{width: 30, height: 30}}
-              resizeMode="contain"
-            />
-            <TextInput
-              placeholder="Phone"
-              style={styles.input}
-              placeholderTextColor="#999"
-              keyboardType="numeric"
-            />
-          </View>
-          <View style={styles.inputWrapper}>
-            <Image
-              source={require('../../assets/images/lock.png')}
-              style={{width: 30, height: 30}}
-              resizeMode="contain"
-            />
-            <TextInput
-              placeholder="Password"
-              secureTextEntry
-              style={styles.input}
-              placeholderTextColor="#999"
-            />
-          </View>
-          <View style={styles.inputWrapper}>
-            <Image
-              source={require('../../assets/images/lock.png')}
-              style={{width: 30, height: 30}}
-              resizeMode="contain"
-            />
-            <TextInput
-              placeholder="Repeat Password"
-              secureTextEntry
-              style={styles.input}
-              placeholderTextColor="#999"
-            />
-          </View>
-
-          {/* Log In Button */}
-          <TouchableOpacity
-            onPress={() => navigation.navigate('VerifyEmail')}
-            style={styles.loginButton}>
-            <Text style={styles.loginButtonText}>Next</Text>
-          </TouchableOpacity>
-        </View>
-      </ImageBackground>
-    </SafeAreaView>
-  );
+interface SignupScreenProps {
+  navigation: any;
 }
 
-const styles = StyleSheet.create({
-  container: {flex: 1, backgroundColor: '#fff'},
+const SignupScreen: React.FC<SignupScreenProps> = ({navigation}) => {
+  const {update} = useSignupFlow();
 
+  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [password, setPassword] = useState('');
+  const [passwordAgain, setPasswordAgain] = useState('');
+  const [error, setError] = useState('');
+
+  const handleNext = () => {
+    // Basic validation for this step only
+    if (!username.trim() || !email.trim() || !phone.trim() || !password) {
+      setError('Please fill in all required fields.');
+      return;
+    }
+    if (password !== passwordAgain) {
+      setError('Passwords do not match.');
+      return;
+    }
+
+    setError('');
+
+    update({
+      email,
+      phone,
+      password,
+      name: username || undefined,
+    });
+
+    navigation.navigate('VerifyEmail');
+  };
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}>
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <ImageBackground
+            source={require('../../assets/images/signup.png')}
+            style={styles.imageBackground}
+            resizeMode="cover">
+            <ScrollView
+              contentContainerStyle={styles.content}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}>
+              {/* Title */}
+              <Text style={styles.loginText}>Sign Up</Text>
+
+              {/* Form */}
+              <View style={styles.inputContainer}>
+                {/* Username */}
+                <View style={styles.inputWrapper}>
+                  <Image
+                    source={require('../../assets/images/user.png')}
+                    style={styles.iconImage}
+                    resizeMode="contain"
+                  />
+                  <TextInput
+                    placeholder="User name"
+                    style={styles.input}
+                    placeholderTextColor="#999"
+                    value={username}
+                    onChangeText={setUsername}
+                    returnKeyType="next"
+                  />
+                </View>
+
+                {/* Email */}
+                <View style={styles.inputWrapper}>
+                  <Image
+                    source={require('../../assets/images/mail.png')}
+                    style={styles.iconImage}
+                    resizeMode="contain"
+                  />
+                  <TextInput
+                    placeholder="Email"
+                    style={styles.input}
+                    placeholderTextColor="#999"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    value={email}
+                    onChangeText={setEmail}
+                    returnKeyType="next"
+                  />
+                </View>
+
+                {/* Phone */}
+                <View style={styles.inputWrapper}>
+                  <Image
+                    source={require('../../assets/images/phone.png')}
+                    style={styles.iconImage}
+                    resizeMode="contain"
+                  />
+                  <TextInput
+                    placeholder="Phone"
+                    style={styles.input}
+                    placeholderTextColor="#999"
+                    keyboardType="phone-pad"
+                    value={phone}
+                    onChangeText={setPhone}
+                    returnKeyType="next"
+                  />
+                </View>
+
+                {/* Password */}
+                <View style={styles.inputWrapper}>
+                  <Image
+                    source={require('../../assets/images/lock.png')}
+                    style={styles.iconImage}
+                    resizeMode="contain"
+                  />
+                  <TextInput
+                    placeholder="Password"
+                    secureTextEntry
+                    style={styles.input}
+                    placeholderTextColor="#999"
+                    value={password}
+                    onChangeText={setPassword}
+                    returnKeyType="next"
+                  />
+                </View>
+
+                {/* Repeat Password */}
+                <View style={styles.inputWrapper}>
+                  <Image
+                    source={require('../../assets/images/lock.png')}
+                    style={styles.iconImage}
+                    resizeMode="contain"
+                  />
+                  <TextInput
+                    placeholder="Repeat Password"
+                    secureTextEntry
+                    style={styles.input}
+                    placeholderTextColor="#999"
+                    value={passwordAgain}
+                    onChangeText={setPasswordAgain}
+                    returnKeyType="done"
+                    onSubmitEditing={handleNext}
+                  />
+                </View>
+
+                {/* Error message */}
+                {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+                {/* Next Button */}
+                <TouchableOpacity
+                  onPress={handleNext}
+                  style={styles.loginButton}>
+                  <Text style={styles.loginButtonText}>Next</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </ImageBackground>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+};
+
+export default SignupScreen;
+
+const styles = StyleSheet.create({
+  flex: {
+    flex: 1,
+  },
+  container: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
   imageBackground: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
     width: '100%',
     height: '100%',
   },
-
-  dotsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: 10,
+  content: {
+    flexGrow: 1,
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    paddingHorizontal: 25,
+    paddingBottom: 40,
   },
-  dot: {
-    width: 8,
-    height: 8,
-    backgroundColor: '#ccc',
-    borderRadius: 4,
-    marginHorizontal: 4,
-  },
-  activeDot: {
-    backgroundColor: '#ff4081',
-    width: 10,
-    height: 10,
-  },
-
   loginText: {
     fontSize: 28,
     fontWeight: 'bold',
     textAlign: 'center',
-    marginTop: 180,
     color: '#000',
+    marginBottom: 24,
   },
-
   inputContainer: {
-    marginTop: 20,
-    paddingHorizontal: 25,
+    width: '100%',
+    alignItems: 'center',
   },
-
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -156,29 +229,16 @@ const styles = StyleSheet.create({
     gap: 20,
     paddingVertical: 1,
   },
-
-  icon: {
-    marginRight: 8,
+  iconImage: {
+    width: 30,
+    height: 30,
   },
-
   input: {
     flex: 1,
     height: 45,
     fontSize: 12,
     color: '#000',
   },
-
-  forgotPassword: {
-    alignSelf: 'flex-end',
-    marginBottom: 20,
-  },
-
-  forgotText: {
-    fontSize: 12,
-    color: '#ff4081',
-    fontWeight: '500',
-  },
-
   loginButton: {
     backgroundColor: '#FD6496',
     paddingVertical: 14,
@@ -190,23 +250,18 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
     marginBottom: 20,
+    width: '80%',
   },
-
   loginButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
   },
-
-  footerText: {
+  errorText: {
+    color: '#dc2626',
+    fontSize: 12,
+    marginBottom: 8,
     textAlign: 'center',
-    fontSize: 13,
-    color: '#666',
-  },
-
-  signUpText: {
-    color: '#ff4081',
-    fontWeight: '600',
-    textDecorationLine: 'underline',
+    width: '80%',
   },
 });

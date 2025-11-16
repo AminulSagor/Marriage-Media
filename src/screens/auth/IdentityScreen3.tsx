@@ -7,10 +7,12 @@ import {
   StyleSheet,
   FlatList,
   ImageBackground,
-  SafeAreaView,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
-const Cast = [
+import {SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
+import {useSignupFlow} from '../../context/SignupFlowContext';
+
+const CAST = [
   'Tajik',
   'Pashtun',
   'Uzbek',
@@ -50,24 +52,45 @@ const Cast = [
   'Other',
 ];
 
-const IdentityScreen3 = ({navigation}) => {
-  const [search, setSearch] = useState('');
-  const [selected, setSelected] = useState(null);
+interface IdentityScreen3Props {
+  navigation: any;
+}
 
-  const filteredCountries = Cast.filter(item =>
-    item.toLowerCase().includes(search.toLowerCase()),
-  );
+const IdentityScreen3: React.FC<IdentityScreen3Props> = ({navigation}) => {
+  const insets = useSafeAreaInsets();
+  const {update} = useSignupFlow();
+
+  const [search, setSearch] = useState('');
+  const [selected, setSelected] = useState<string | null>(null);
+
+  const filteredCast =
+    CAST.filter(item => item.toLowerCase().includes(search.toLowerCase())) ||
+    [];
+
+  const handleConfirm = () => {
+    if (!selected) {
+      return;
+    }
+    update({ethnicity: selected});
+    navigation.navigate('IdentityScreen4');
+  };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ImageBackground
-        source={require('../../assets/images/country.png')}
-        style={styles.background}
-        resizeMode="cover">
-        <TouchableOpacity style={styles.backButton}>
-          <Icon name="chevron-back" size={24} color="#000" />
+    <ImageBackground
+      source={require('../../assets/images/country.png')}
+      style={styles.background}
+      resizeMode="cover">
+      {/* Main content inside safe area (for notch) */}
+      <SafeAreaView style={[styles.safeArea]} edges={['top', 'left', 'right']}>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()}>
+            <Icon name="chevron-back" size={24} color="#000" />
+          </TouchableOpacity>
           <Text style={styles.title}>Basic Identity</Text>
-        </TouchableOpacity>
+          <View style={{width: 24}} />
+        </View>
+
         <Text style={styles.subtitle}>Select your Ethnicity</Text>
 
         {/* Search Input */}
@@ -84,14 +107,16 @@ const IdentityScreen3 = ({navigation}) => {
             value={search}
             onChangeText={setSearch}
             style={styles.searchInput}
+            returnKeyType="search"
           />
         </View>
 
-        {/* Country List */}
+        {/* Ethnicity List */}
         <View style={styles.listBox}>
           <FlatList
-            data={filteredCountries}
+            data={filteredCast}
             keyExtractor={item => item}
+            keyboardShouldPersistTaps="handled"
             renderItem={({item}) => (
               <TouchableOpacity
                 style={styles.listItem}
@@ -104,50 +129,51 @@ const IdentityScreen3 = ({navigation}) => {
             )}
           />
         </View>
+      </SafeAreaView>
 
-        {/* Confirm Button */}
-        <TouchableOpacity
-          onPress={() => navigation?.navigate('IdentityScreen4')}
-          style={styles.confirmButton}>
-          <Text style={styles.confirmText}>Confirm</Text>
-        </TouchableOpacity>
-      </ImageBackground>
-    </SafeAreaView>
+      {/* Confirm Button pinned to bottom, respects bottom inset, bg full-screen */}
+      <TouchableOpacity
+        disabled={!selected}
+        onPress={handleConfirm}
+        style={[
+          styles.confirmButton,
+          {
+            bottom: (insets.bottom || 16) + 16,
+            backgroundColor: selected ? '#f472b6' : '#ddd',
+          },
+        ]}>
+        <Text style={styles.confirmText}>Confirm</Text>
+      </TouchableOpacity>
+    </ImageBackground>
   );
 };
 
 export default IdentityScreen3;
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
   background: {
+    flex: 1,
+  },
+  safeArea: {
     flex: 1,
     paddingHorizontal: 24,
   },
-  backButton: {
-    position: 'absolute',
-    top: 20,
-    left: 20,
-    zIndex: 10,
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 70,
+    justifyContent: 'space-between',
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    alignSelf: 'center',
     color: '#000',
   },
   subtitle: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '600',
+    marginTop: 24,
     marginBottom: 20,
     color: '#000',
-    marginTop: 100,
   },
   searchBox: {
     flexDirection: 'row',
@@ -168,6 +194,7 @@ const styles = StyleSheet.create({
     color: '#000',
   },
   listBox: {
+    flexShrink: 1,
     backgroundColor: '#fff',
     borderRadius: 14,
     paddingVertical: 6,
@@ -205,10 +232,8 @@ const styles = StyleSheet.create({
   },
   confirmButton: {
     position: 'absolute',
-    bottom: 30,
     left: 24,
     right: 24,
-    backgroundColor: '#f472b6',
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: 'center',

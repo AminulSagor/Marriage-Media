@@ -6,48 +6,125 @@ import {
   FlatList,
   Image,
   TouchableOpacity,
-  ScrollView,
   Modal,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import Feather from 'react-native-vector-icons/Feather';
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQueryClient,
+} from '@tanstack/react-query';
+
 import PostModal from '../../Components/PostModal';
+import {
+  fetchFeedPage,
+  FeedPost,
+  createPost,
+  PostImageFile,
+} from '../../api/posts';
+import {API_BASE_URL} from '../../config/env';
 
-const HomeScreen = ({navigation}) => {
+// new imports
+import PostCounts from '../../Components/PostCounts';
+import ReactorsBottomSheet from '../../Components/ReactorsBottomSheet';
+import CommentsBottomSheet from '../../Components/CommentsBottomSheet';
+
+interface HomeScreenProps {
+  navigation: any;
+}
+
+const stories = [
+  {id: '1', name: 'My Story', image: require('../../assets/images/img2.png')},
+  {id: '2', name: 'Salina', image: require('../../assets/images/img1.png')},
+  {id: '3', name: 'Laisa', image: require('../../assets/images/pic10.png')},
+  {id: '4', name: 'Niaz', image: require('../../assets/images/img1.png')},
+];
+
+const PAGE_SIZE = 10;
+
+const HomeScreen: React.FC<HomeScreenProps> = ({navigation}) => {
   const [showModal, setShowModal] = useState(false);
-  const [showWarning, setShowWarning] = useState(false); // ⚠️ warning modal
+  const [showWarning, setShowWarning] = useState(false);
 
-  const stories = [
-    {id: '1', name: 'My Story', image: require('../../assets/images/img2.png')},
-    {id: '2', name: 'Salina', image: require('../../assets/images/img1.png')},
-    {id: '3', name: 'Laisa', image: require('../../assets/images/pic10.png')},
-    {id: '4', name: 'Niaz', image: require('../../assets/images/img1.png')},
-  ];
+  const [reactSheetVisible, setReactSheetVisible] = useState(false);
+  const [reactSheetPostId, setReactSheetPostId] = useState<number | null>(null);
 
-  const posts = [
-    {
-      id: '1',
-      user: 'Salina Akhter',
-      time: '34mins ago',
-      image: require('../../assets/images/rtc1.png'),
-      avatar: require('../../assets/images/pic10.png'),
-      text: 'Lorem ipsum dolor sit amet...',
-      likes: '4.9k',
-      comments: '1k',
+  const [commentSheetVisible, setCommentSheetVisible] = useState(false);
+  const [commentSheetPostId, setCommentSheetPostId] = useState<number | null>(
+    null,
+  );
+
+  const queryClient = useQueryClient();
+
+  // Feed
+  const {
+    data,
+    isLoading,
+    isError,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    refetch,
+  } = useInfiniteQuery({
+    queryKey: ['feed', PAGE_SIZE],
+    initialPageParam: 1,
+    queryFn: ({pageParam}) =>
+      fetchFeedPage(typeof pageParam === 'number' ? pageParam : 1, PAGE_SIZE),
+    getNextPageParam: lastPage => {
+      const {page, limit, total, data: rows} = lastPage;
+      if (!rows || rows.length === 0) return undefined;
+      const loaded = page * limit;
+      if (loaded >= total) return undefined;
+      return page + 1;
     },
-    {
-      id: '2',
-      user: 'Suhana Khan',
-      time: '14mins ago',
-      image: require('../../assets/images/rtc.png'),
-      avatar: require('../../assets/images/img1.png'),
-      text: 'Lorem ipsum dolor sit amet...',
-      likes: '3.5k',
-      comments: '1k',
-    },
-  ];
+  });
 
-  const renderStory = ({item}) => (
+  const feedPosts: FeedPost[] =
+    data?.pages.flatMap(page => page.data ?? []) ?? [];
+
+  // Create post
+  const {mutate: doCreatePost, isPending: isPosting} = useMutation({
+    mutationFn: createPost,
+    onSuccess: () => {
+      setShowModal(false);
+      queryClient.invalidateQueries({queryKey: ['feed']});
+    },
+    onError: (err: any) => {
+      const msg =
+        err?.response?.data?.message ||
+        err?.message ||
+        'Failed to create post. Please try again.';
+      Alert.alert('Post failed', msg);
+    },
+  });
+
+  const handleSubmitPost = (caption: string, image?: PostImageFile | null) => {
+    if (!caption.trim() && !image) {
+      Alert.alert('Please add a caption or select an image.');
+      return;
+    }
+
+    doCreatePost({
+      caption,
+      image: image || undefined,
+    });
+  };
+
+  const handleOpenReactsSheet = (postId: number) => {
+    setReactSheetPostId(postId);
+    setReactSheetVisible(true);
+  };
+
+  const handleOpenCommentsSheet = (postId: number) => {
+    setCommentSheetPostId(postId);
+    setCommentSheetVisible(true);
+  };
+
+  // Renderers
+  const renderStory = ({item}: {item: (typeof stories)[number]}) => (
     <TouchableOpacity
       onPress={() => navigation?.navigate('OtherProfileScreen')}
       style={styles.storyItem}>
@@ -56,41 +133,68 @@ const HomeScreen = ({navigation}) => {
     </TouchableOpacity>
   );
 
-  const renderPost = post => (
-    <View style={styles.postContainer}>
-      <View style={styles.postHeader}>
-        <Image source={post.avatar} style={styles.avatar} />
-        <View>
-          <Text style={styles.userName}>{post.user}</Text>
-          <Text style={styles.time}>{post.time}</Text>
+  const renderPostItem = ({item}: {item: FeedPost}) => {
+    const avatarUri = item.pro_path
+      ? `${API_BASE_URL}/${item.pro_path}`
+      : undefined;
+    const postUri = item.image_path
+      ? `${API_BASE_URL}/${item.image_path}`
+      : undefined;
+
+    return (
+      <View style={styles.postContainer}>
+        <View style={styles.postHeader}>
+          {avatarUri ? (
+            <Image source={{uri: avatarUri}} style={styles.avatar} />
+          ) : (
+            <View style={[styles.avatar, {backgroundColor: '#ddd'}]} />
+          )}
+
+          <View>
+            <Text style={styles.userName}>{item.name || 'Unknown user'}</Text>
+            {item.created_at && (
+              <Text style={styles.time}>
+                {new Date(item.created_at).toLocaleString()}
+              </Text>
+            )}
+          </View>
+
+          <Icon
+            name="ellipsis-vertical"
+            size={20}
+            color="#000"
+            style={{marginLeft: 'auto'}}
+          />
         </View>
-        <Icon
-          name="ellipsis-vertical"
-          size={20}
-          color="#000"
-          style={{marginLeft: 'auto'}}
+
+        {postUri ? (
+          <Image source={{uri: postUri}} style={styles.postImage} />
+        ) : (
+          <View style={styles.postImagePlaceholder} />
+        )}
+
+        {item.caption ? (
+          <Text style={styles.postText}>{item.caption}</Text>
+        ) : null}
+
+        <PostCounts
+          postId={item.id}
+          onPressReacts={handleOpenReactsSheet}
+          onPressComments={handleOpenCommentsSheet}
         />
       </View>
-      {post.image ? (
-        <Image source={post.image} style={styles.postImage} />
-      ) : (
-        <View style={styles.postImagePlaceholder} />
-      )}
-      <Text style={styles.postText}>{post.text}</Text>
-      <View style={styles.reactions}>
-        <Text>❤️ {post.likes}</Text>
-        <Text>💬 {post.comments}</Text>
-      </View>
-    </View>
-  );
+    );
+  };
 
-  return (
-    <View style={styles.container}>
-      {/* Header */}
+  const renderListHeader = () => (
+    <>
       <View style={styles.header}>
-        <Icon name="arrow-back" size={24} />
+        <Icon
+          name="arrow-back"
+          size={24}
+          onPress={() => navigation?.goBack?.()}
+        />
         <View style={styles.headerIcons}>
-          {/* 🔔 Show warning modal here */}
           <TouchableOpacity onPress={() => setShowWarning(true)}>
             <Icon name="notifications-outline" size={24} style={styles.icon} />
           </TouchableOpacity>
@@ -100,7 +204,6 @@ const HomeScreen = ({navigation}) => {
         </View>
       </View>
 
-      {/* Stories */}
       <FlatList
         data={stories}
         renderItem={renderStory}
@@ -110,14 +213,64 @@ const HomeScreen = ({navigation}) => {
         contentContainerStyle={styles.storiesContainer}
       />
 
-      {/* Posts */}
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {posts.map(post => (
-          <View key={post.id}>{renderPost(post)}</View>
-        ))}
-      </ScrollView>
+      {isLoading && (
+        <View style={styles.center}>
+          <ActivityIndicator />
+          <Text style={styles.loadingText}>Loading feed...</Text>
+        </View>
+      )}
 
-      {/* ✅ Floating Plus Button */}
+      {isError && !isLoading && (
+        <View style={styles.center}>
+          <Text style={styles.errorText}>
+            Failed to load posts. Pull to refresh or try again.
+          </Text>
+        </View>
+      )}
+
+      {!isLoading && !isError && feedPosts.length === 0 && (
+        <View style={styles.center}>
+          <Text style={styles.loadingText}>No posts yet.</Text>
+        </View>
+      )}
+    </>
+  );
+
+  const renderListFooter = () => (
+    <View style={{paddingBottom: 140}}>
+      {isFetchingNextPage && (
+        <View style={styles.center}>
+          <ActivityIndicator />
+          <Text style={styles.loadingText}>Loading more...</Text>
+        </View>
+      )}
+      {!hasNextPage && feedPosts.length > 0 && (
+        <View style={styles.center}>
+          <Text style={styles.loadingText}>No more posts.</Text>
+        </View>
+      )}
+    </View>
+  );
+
+  return (
+    <View style={styles.container}>
+      <FlatList
+        data={feedPosts}
+        keyExtractor={item => String(item.id)}
+        renderItem={renderPostItem}
+        ListHeaderComponent={renderListHeader}
+        ListFooterComponent={renderListFooter}
+        onEndReachedThreshold={0.4}
+        onEndReached={() => {
+          if (hasNextPage && !isFetchingNextPage && !isLoading) {
+            fetchNextPage();
+          }
+        }}
+        refreshing={isLoading}
+        onRefresh={() => refetch()}
+        showsVerticalScrollIndicator={false}
+      />
+
       <TouchableOpacity
         style={styles.fab}
         onPress={() => setShowModal(true)}
@@ -125,16 +278,15 @@ const HomeScreen = ({navigation}) => {
         <Feather name="plus" size={28} color="#fff" />
       </TouchableOpacity>
 
-      {/* ✅ Post Modal */}
       <PostModal
         visible={showModal}
-        onClose={() => setShowModal(false)}
-        onPost={() => {
-          setShowModal(false);
+        onClose={() => {
+          if (!isPosting) setShowModal(false);
         }}
+        onPost={handleSubmitPost}
+        isPosting={isPosting}
       />
 
-      {/* ⚠️ Warning Modal */}
       <Modal
         visible={showWarning}
         animationType="fade"
@@ -154,6 +306,24 @@ const HomeScreen = ({navigation}) => {
           </View>
         </View>
       </Modal>
+
+      <ReactorsBottomSheet
+        visible={reactSheetVisible}
+        postId={reactSheetPostId}
+        onClose={() => {
+          setReactSheetVisible(false);
+          setReactSheetPostId(null);
+        }}
+      />
+
+      <CommentsBottomSheet
+        visible={commentSheetVisible}
+        postId={commentSheetPostId}
+        onClose={() => {
+          setCommentSheetVisible(false);
+          setCommentSheetPostId(null);
+        }}
+      />
     </View>
   );
 };
@@ -162,18 +332,7 @@ export default HomeScreen;
 
 const styles = StyleSheet.create({
   container: {flex: 1, backgroundColor: '#fff', paddingTop: 40},
-  fab: {
-    position: 'absolute',
-    bottom: 120,
-    right: 20,
-    backgroundColor: '#f04b60',
-    width: 50,
-    height: 50,
-    borderRadius: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 8,
-  },
+
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -182,6 +341,7 @@ const styles = StyleSheet.create({
   },
   headerIcons: {flexDirection: 'row', marginLeft: 'auto'},
   icon: {marginRight: 12},
+
   storiesContainer: {paddingHorizontal: 10, marginBottom: 15},
   storyItem: {alignItems: 'center', marginRight: 14},
   storyImage: {
@@ -192,6 +352,7 @@ const styles = StyleSheet.create({
     borderColor: 'deeppink',
   },
   storyText: {marginTop: 5, fontSize: 12, color: '#333'},
+
   postContainer: {
     backgroundColor: '#f9f9f9',
     marginBottom: 15,
@@ -212,13 +373,51 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   postText: {fontSize: 13, color: '#333', marginTop: 8},
+
   reactions: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginTop: 10,
   },
+  reactionText: {
+    fontSize: 13,
+    color: '#111',
+  },
+  reactionDisabled: {
+    color: '#aaa',
+  },
 
-  // ⚠️ Modal styles
+  fab: {
+    position: 'absolute',
+    bottom: 110,
+    right: 20,
+    backgroundColor: '#f04b60',
+    width: 50,
+    height: 50,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 8,
+  },
+
+  center: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+  },
+  loadingText: {
+    marginTop: 4,
+    fontSize: 12,
+    color: '#666',
+  },
+  errorText: {
+    marginTop: 4,
+    fontSize: 12,
+    color: '#dc2626',
+    textAlign: 'center',
+    paddingHorizontal: 16,
+  },
+
   modalOverlay: {
     flex: 1,
     justifyContent: 'center',
