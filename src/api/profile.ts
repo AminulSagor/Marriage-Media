@@ -28,7 +28,6 @@ export interface UserProfile {
   dietary_preference?: string | null;
   marital_status?: string | null;
   have_child?: number | null;
-  // add any other fields you need from the API
   pro_path?: string | null;
   image_one?: string | null;
   image_two?: string | null;
@@ -44,11 +43,67 @@ export async function fetchProfile(): Promise<UserProfile> {
     const res = await api.get<ProfileResponse>('/users/profile');
     return res.data.data;
   } catch (error) {
-    // Optional: extra logging specific to this call
-    if (__DEV__) {
-      console.log('fetchProfile error:', error);
-    }
-    // Important: rethrow so React Query / caller gets it
+    if (__DEV__) console.log('fetchProfile error:', error);
     throw error;
   }
+}
+
+/** ---------- UPDATE PROFILE ---------- **/
+
+export interface UpdateProfilePayload {
+  name?: string;
+  gender?: string;
+  dob?: string;
+  country?: string;
+  city?: string;
+  latitude?: string | number;
+  longitude?: string | number;
+  ethnicity?: string;
+  education?: string;
+  profession?: string;
+  body_type?: string;
+  height?: string | number;
+  weight?: string | number;
+  hair_color?: string;
+  eye_color?: string;
+  skin_color?: string;
+  religion?: string;
+  religion_section?: string;
+  prayer_frequency?: string | number;
+  dress_code?: string;
+  dietary_preference?: string;
+  marital_status?: string;
+  marital_duration?: number;
+  have_child?: string; // API expects string per spec
+  want_child?: string;
+  prefered_partner_age_start?: number;
+  prefered_partner_age_end?: number;
+  prefered_partner_distance_range?: number;
+  prefered_partner_religion?: string;
+  prefered_partner_religion_section?: string;
+  prefered_partner_occupation?: string;
+  prefered_partner_education?: string;
+}
+
+export interface UpdateProfileResponse {
+  status: string; // "success"
+  message: string; // "user details updated"
+}
+
+/**
+ * Update profile.
+ * Endpoint: /users/update
+ * Note: Docs show GET, but server accepts a body; send as POST JSON.
+ * The payload is cleaned so undefined/empty-string fields aren’t sent.
+ */
+export async function updateProfile(
+  payload: UpdateProfilePayload,
+): Promise<UpdateProfileResponse> {
+  const body: Record<string, unknown> = {};
+  Object.entries(payload).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== '') body[k] = v;
+  });
+
+  const {data} = await api.put<UpdateProfileResponse>('/users/update', body);
+  return data;
 }

@@ -1,95 +1,65 @@
+// PostCounts.tsx
 import React from 'react';
-import {View, Text, StyleSheet, TouchableOpacity} from 'react-native';
+import {View, Text, StyleSheet, Pressable} from 'react-native';
+import Icon from 'react-native-vector-icons/Ionicons';
 import {useQuery} from '@tanstack/react-query';
 import {fetchPostComments, fetchPostReactors} from '../api/posts';
 
-interface PostCountsProps {
-  postId: number;
-  onPressReacts?: (postId: number, total: number) => void;
-  onPressComments?: (postId: number, total: number) => void;
-}
+const COUNT_LIMIT = 1;
 
-const PostCounts: React.FC<PostCountsProps> = ({
+export default function PostCounts({
   postId,
   onPressReacts,
   onPressComments,
-}) => {
-  const {
-    data: reactsData,
-    isLoading: reactsLoading,
-    isError: reactsError,
-  } = useQuery({
+}: {
+  postId: number;
+  onPressReacts?: (postId: number) => void;
+  onPressComments?: (postId: number) => void;
+}) {
+  const {data: reactsData, isLoading: reactsLoading} = useQuery({
     queryKey: ['post-reacts-count', postId],
-    queryFn: () => fetchPostReactors({post_id: postId, page: 1, limit: 1}),
+    queryFn: () =>
+      fetchPostReactors({post_id: postId, page: 1, limit: COUNT_LIMIT}),
   });
 
-  const {
-    data: commentsData,
-    isLoading: commentsLoading,
-    isError: commentsError,
-  } = useQuery({
+  const {data: commentsData, isLoading: commentsLoading} = useQuery({
     queryKey: ['post-comments-count', postId],
-    queryFn: () => fetchPostComments({post_id: postId, page: 1, limit: 1}),
+    queryFn: () =>
+      fetchPostComments({post_id: postId, page: 1, limit: COUNT_LIMIT}),
   });
 
-  const reactsTotal =
-    !reactsLoading && !reactsError ? reactsData?.total ?? 0 : 0;
-  const commentsTotal =
-    !commentsLoading && !commentsError ? commentsData?.total ?? 0 : 0;
-
-  const handleReactsPress = () => {
-    if (reactsTotal > 0 && onPressReacts) {
-      onPressReacts(postId, reactsTotal);
-    }
-  };
-
-  const handleCommentsPress = () => {
-    if (commentsTotal > 0 && onPressComments) {
-      onPressComments(postId, commentsTotal);
-    }
-  };
+  const reactsTotal = !reactsLoading ? reactsData?.total ?? 0 : 0;
+  const commentsTotal = !commentsLoading ? commentsData?.total ?? 0 : 0;
 
   return (
-    <View style={styles.reactions}>
-      <TouchableOpacity
-        onPress={handleReactsPress}
-        disabled={reactsTotal === 0}>
-        <Text
-          style={[
-            styles.reactionText,
-            reactsTotal === 0 && styles.reactionDisabled,
-          ]}>
-          ❤️ {reactsTotal}
-        </Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        onPress={handleCommentsPress}
-        disabled={commentsTotal === 0}>
-        <Text
-          style={[
-            styles.reactionText,
-            commentsTotal === 0 && styles.reactionDisabled,
-          ]}>
-          💬 {commentsTotal}
-        </Text>
-      </TouchableOpacity>
+    <View style={styles.row}>
+      <Pressable
+        onPress={() => onPressReacts?.(postId)}
+        style={styles.item}
+        android_ripple={{color: '#eee'}}>
+        <Icon name="heart" size={18} color="#d11" />
+        <Text style={styles.text}>{reactsTotal}</Text>
+      </Pressable>
+
+      {/* ALWAYS tappable even when commentsTotal === 0 */}
+      <Pressable
+        onPress={() => onPressComments?.(postId)}
+        style={styles.item}
+        android_ripple={{color: '#eee'}}>
+        <Icon name="chatbubble-ellipses-outline" size={18} color="#444" />
+        <Text style={styles.text}>{commentsTotal}</Text>
+      </Pressable>
     </View>
   );
-};
-
-export default PostCounts;
+}
 
 const styles = StyleSheet.create({
-  reactions: {
+  row: {flexDirection: 'row', justifyContent: 'space-between', marginTop: 10},
+  item: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 10,
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 6,
   },
-  reactionText: {
-    fontSize: 13,
-    color: '#111',
-  },
-  reactionDisabled: {
-    color: '#aaa',
-  },
+  text: {fontSize: 13, color: '#111'},
 });

@@ -11,29 +11,37 @@ import {
   FlatList,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
-import {useInfiniteQuery} from '@tanstack/react-query';
+import {useInfiniteQuery, useQuery} from '@tanstack/react-query';
 import {
   fetchBusinesses,
   Business,
   GetBusinessesResponse,
 } from '../../api/business';
+import {fetchProfile, UserProfile} from '../../api/profile';
 import {API_BASE_URL} from '../../config/env';
 
 const {width} = Dimensions.get('window');
 const PAGE_LIMIT = 10;
 
 const WorldScreen = ({navigation}: {navigation: any}) => {
-  // This input drives API search; the location icon only toggles this value.
   const [search, setSearch] = useState<string>('');
 
-  // Toggle button: set text to "Afghanistan" (again to clear)
+  // 👉 current user profile
+  const {data: profile} = useQuery<UserProfile>({
+    queryKey: ['profile'],
+    queryFn: fetchProfile,
+  });
+
+  const avatarUri = (profile as any)?.pro_path
+    ? `${API_BASE_URL}/${(profile as any).pro_path}`
+    : undefined;
+
   const handleToggleLocation = () => {
     setSearch(prev =>
       prev.trim().toLowerCase() === 'afghanistan' ? '' : 'Afghanistan',
     );
   };
 
-  // Fetch businesses with pagination; filters by `search` only
   const {
     data,
     isLoading,
@@ -70,7 +78,9 @@ const WorldScreen = ({navigation}: {navigation: any}) => {
 
     return (
       <TouchableOpacity
-        onPress={() => navigation?.navigate('WeddingServicesScreen')}
+        onPress={() =>
+          navigation?.navigate('WeddingServicesScreen', {business: item})
+        }
         style={styles.serviceCard}>
         {coverUri ? (
           <Image source={{uri: coverUri}} style={styles.cardImage} />
@@ -96,12 +106,17 @@ const WorldScreen = ({navigation}: {navigation: any}) => {
 
   return (
     <View style={styles.container}>
-      {/* Header search (filters API) + simple location toggle */}
+      {/* Header: current user */}
       <View style={styles.header}>
-        <Image
-          source={require('../../assets/images/img1.png')}
-          style={styles.profileImage}
-        />
+        {avatarUri ? (
+          <Image source={{uri: avatarUri}} style={styles.profileImage} />
+        ) : (
+          <Image
+            source={require('../../assets/images/img1.png')}
+            style={styles.profileImage}
+          />
+        )}
+
         <View style={styles.searchBar}>
           <Icon name="search" size={20} color="#aaa" />
           <TextInput
@@ -127,9 +142,15 @@ const WorldScreen = ({navigation}: {navigation: any}) => {
         </View>
       </View>
 
-      <Text style={styles.welcomeText}>Welcome, Jhon</Text>
+      <Text style={styles.welcomeText}>Welcome, {profile?.name || 'User'}</Text>
 
-      {/* Business nearby */}
+      <TouchableOpacity
+        style={styles.addButton}
+        onPress={() => navigation?.navigate('BusinessSignup')}>
+        <Text style={styles.addButtonText}>Add your Business</Text>
+        <Text style={styles.addButtonPlus}>+</Text>
+      </TouchableOpacity>
+
       <Text style={styles.sectionTitle}>Business nearby</Text>
 
       <FlatList
@@ -142,9 +163,7 @@ const WorldScreen = ({navigation}: {navigation: any}) => {
         showsVerticalScrollIndicator={false}
         onEndReachedThreshold={0.4}
         onEndReached={() => {
-          if (hasNextPage && !isFetchingNextPage && !isLoading) {
-            fetchNextPage();
-          }
+          if (hasNextPage && !isFetchingNextPage && !isLoading) fetchNextPage();
         }}
         refreshing={isLoading}
         onRefresh={refetch}
@@ -267,5 +286,24 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontSize: 12,
     color: '#666',
+  },
+  addButton: {
+    flexDirection: 'row',
+    alignSelf: 'center',
+    borderWidth: 1,
+    borderColor: '#EC4D73',
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    marginBottom: 20,
+    alignItems: 'center',
+  },
+  addButtonText: {
+    color: '#EC4D73',
+    marginRight: 4,
+  },
+  addButtonPlus: {
+    color: '#EC4D73',
+    fontSize: 16,
   },
 });

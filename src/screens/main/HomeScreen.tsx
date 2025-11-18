@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useState, useRef} from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,8 @@ import {
   Modal,
   ActivityIndicator,
   Alert,
+  Animated,
+  Easing,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import Feather from 'react-native-vector-icons/Feather';
@@ -24,10 +26,14 @@ import {
   FeedPost,
   createPost,
   PostImageFile,
+  reactToPost, // <- make sure this exists in api/posts
 } from '../../api/posts';
 import {API_BASE_URL} from '../../config/env';
 
-// new imports
+// gesture-handler
+import {Gesture, GestureDetector} from 'react-native-gesture-handler';
+
+// detached UI parts
 import PostCounts from '../../Components/PostCounts';
 import ReactorsBottomSheet from '../../Components/ReactorsBottomSheet';
 import CommentsBottomSheet from '../../Components/CommentsBottomSheet';
@@ -45,6 +51,127 @@ const stories = [
 
 const PAGE_SIZE = 10;
 
+/** Small card component so each post can manage its own heart animation */
+const PostCard: React.FC<{
+  item: FeedPost;
+  onOpenReacts: (postId: number) => void;
+  onOpenComments: (postId: number) => void;
+  onDoubleTapReact: (postId: number) => void;
+}> = ({item, onOpenReacts, onOpenComments, onDoubleTapReact}) => {
+  const avatarUri = item.pro_path
+    ? `${API_BASE_URL}/${item.pro_path}`
+    : undefined;
+  const postUri = item.image_path
+    ? `${API_BASE_URL}/${item.image_path}`
+    : undefined;
+
+  // heart animation
+  const scale = useRef(new Animated.Value(0)).current;
+  const opacity = scale.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 1],
+  });
+
+  const showHeart = () => {
+    // pop in, hold briefly, fade out
+    scale.setValue(0);
+    Animated.sequence([
+      Animated.timing(scale, {
+        toValue: 1,
+        duration: 160,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: true,
+      }),
+      Animated.delay(300),
+      Animated.timing(scale, {
+        toValue: 0,
+        duration: 180,
+        easing: Easing.in(Easing.ease),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const singleTap = Gesture.Tap(); // reserved for exclusivity
+  const doubleTap = Gesture.Tap()
+    .numberOfTaps(2)
+    .maxDelay(250)
+    .onEnd(() => {
+      showHeart(); // visual feedback immediately
+      onDoubleTapReact(item.id); // call API
+    });
+
+  const tapGesture = Gesture.Exclusive(doubleTap, singleTap);
+
+  return (
+    <View style={styles.postContainer}>
+      <View style={styles.postHeader}>
+        {avatarUri ? (
+          <Image source={{uri: avatarUri}} style={styles.avatar} />
+        ) : (
+          <View style={[styles.avatar, {backgroundColor: '#ddd'}]} />
+        )}
+
+        <View>
+          <Text style={styles.userName}>{item.name || 'Unknown user'}</Text>
+          {item.created_at && (
+            <Text style={styles.time}>
+              {new Date(item.created_at).toLocaleString()}
+            </Text>
+          )}
+        </View>
+
+        <Icon
+          name="ellipsis-vertical"
+          size={20}
+          color="#000"
+          style={{marginLeft: 'auto'}}
+        />
+      </View>
+
+      <GestureDetector gesture={tapGesture}>
+        <View>
+          {postUri ? (
+            <Image source={{uri: postUri}} style={styles.postImage} />
+          ) : (
+            <View style={styles.postImagePlaceholder} />
+          )}
+
+          {/* Heart overlay */}
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.heartOverlay,
+              {
+                opacity,
+                transform: [
+                  {
+                    scale: scale.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.7, 1],
+                    }),
+                  },
+                ],
+              },
+            ]}>
+            <Icon name="heart" size={96} color="#ff2d55" />
+          </Animated.View>
+        </View>
+      </GestureDetector>
+
+      {item.caption ? (
+        <Text style={styles.postText}>{item.caption}</Text>
+      ) : null}
+
+      <PostCounts
+        postId={item.id}
+        onPressReacts={onOpenReacts}
+        onPressComments={onOpenComments}
+      />
+    </View>
+  );
+};
+
 const HomeScreen: React.FC<HomeScreenProps> = ({navigation}) => {
   const [showModal, setShowModal] = useState(false);
   const [showWarning, setShowWarning] = useState(false);
@@ -59,7 +186,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({navigation}) => {
 
   const queryClient = useQueryClient();
 
-  // Feed
   const {
     data,
     isLoading,
@@ -101,29 +227,40 @@ const HomeScreen: React.FC<HomeScreenProps> = ({navigation}) => {
     },
   });
 
+  // React to post (API)
+  const reactMutation = useMutation({
+    mutationFn: (postId: number) => reactToPost(postId),
+    onSuccess: (_res, postId) => {
+      queryClient.invalidateQueries({queryKey: ['post-reacts-count', postId]});
+      queryClient.invalidateQueries({queryKey: ['post-reactors', postId]});
+    },
+    onError: (err: any) => {
+      const msg =
+        err?.response?.data?.message || err?.message || 'Failed to react.';
+      Alert.alert('React failed', msg);
+    },
+  });
+
   const handleSubmitPost = (caption: string, image?: PostImageFile | null) => {
     if (!caption.trim() && !image) {
       Alert.alert('Please add a caption or select an image.');
       return;
     }
-
-    doCreatePost({
-      caption,
-      image: image || undefined,
-    });
+    doCreatePost({caption, image: image || undefined});
   };
 
   const handleOpenReactsSheet = (postId: number) => {
     setReactSheetPostId(postId);
     setReactSheetVisible(true);
   };
-
   const handleOpenCommentsSheet = (postId: number) => {
     setCommentSheetPostId(postId);
     setCommentSheetVisible(true);
   };
+  const handleDoubleTapReact = (postId: number) => {
+    reactMutation.mutate(postId);
+  };
 
-  // Renderers
   const renderStory = ({item}: {item: (typeof stories)[number]}) => (
     <TouchableOpacity
       onPress={() => navigation?.navigate('OtherProfileScreen')}
@@ -132,59 +269,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({navigation}) => {
       <Text style={styles.storyText}>{item.name}</Text>
     </TouchableOpacity>
   );
-
-  const renderPostItem = ({item}: {item: FeedPost}) => {
-    const avatarUri = item.pro_path
-      ? `${API_BASE_URL}/${item.pro_path}`
-      : undefined;
-    const postUri = item.image_path
-      ? `${API_BASE_URL}/${item.image_path}`
-      : undefined;
-
-    return (
-      <View style={styles.postContainer}>
-        <View style={styles.postHeader}>
-          {avatarUri ? (
-            <Image source={{uri: avatarUri}} style={styles.avatar} />
-          ) : (
-            <View style={[styles.avatar, {backgroundColor: '#ddd'}]} />
-          )}
-
-          <View>
-            <Text style={styles.userName}>{item.name || 'Unknown user'}</Text>
-            {item.created_at && (
-              <Text style={styles.time}>
-                {new Date(item.created_at).toLocaleString()}
-              </Text>
-            )}
-          </View>
-
-          <Icon
-            name="ellipsis-vertical"
-            size={20}
-            color="#000"
-            style={{marginLeft: 'auto'}}
-          />
-        </View>
-
-        {postUri ? (
-          <Image source={{uri: postUri}} style={styles.postImage} />
-        ) : (
-          <View style={styles.postImagePlaceholder} />
-        )}
-
-        {item.caption ? (
-          <Text style={styles.postText}>{item.caption}</Text>
-        ) : null}
-
-        <PostCounts
-          postId={item.id}
-          onPressReacts={handleOpenReactsSheet}
-          onPressComments={handleOpenCommentsSheet}
-        />
-      </View>
-    );
-  };
 
   const renderListHeader = () => (
     <>
@@ -227,12 +311,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({navigation}) => {
           </Text>
         </View>
       )}
-
-      {!isLoading && !isError && feedPosts.length === 0 && (
-        <View style={styles.center}>
-          <Text style={styles.loadingText}>No posts yet.</Text>
-        </View>
-      )}
     </>
   );
 
@@ -257,7 +335,14 @@ const HomeScreen: React.FC<HomeScreenProps> = ({navigation}) => {
       <FlatList
         data={feedPosts}
         keyExtractor={item => String(item.id)}
-        renderItem={renderPostItem}
+        renderItem={({item}) => (
+          <PostCard
+            item={item}
+            onOpenReacts={handleOpenReactsSheet}
+            onOpenComments={handleOpenCommentsSheet}
+            onDoubleTapReact={handleDoubleTapReact}
+          />
+        )}
         ListHeaderComponent={renderListHeader}
         ListFooterComponent={renderListFooter}
         onEndReachedThreshold={0.4}
@@ -374,19 +459,6 @@ const styles = StyleSheet.create({
   },
   postText: {fontSize: 13, color: '#333', marginTop: 8},
 
-  reactions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 10,
-  },
-  reactionText: {
-    fontSize: 13,
-    color: '#111',
-  },
-  reactionDisabled: {
-    color: '#aaa',
-  },
-
   fab: {
     position: 'absolute',
     bottom: 110,
@@ -400,16 +472,8 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
 
-  center: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-  },
-  loadingText: {
-    marginTop: 4,
-    fontSize: 12,
-    color: '#666',
-  },
+  center: {alignItems: 'center', justifyContent: 'center', paddingVertical: 12},
+  loadingText: {marginTop: 4, fontSize: 12, color: '#666'},
   errorText: {
     marginTop: 4,
     fontSize: 12,
@@ -443,5 +507,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 8,
     borderRadius: 8,
+  },
+
+  heartOverlay: {
+    position: 'absolute',
+    top: '35%',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

@@ -6,7 +6,12 @@ import {SafeAreaView} from 'react-native';
 import WorldScreen from '../screens/main/WorldScreen';
 import WeddingServicesScreen from '../screens/main/WeddingServicesScreen';
 import OtherProfileScreen from '../screens/main/OtherProfileScreen';
-import BusinessListScreen from '../screens/main/BusinessListScreen';
+import BusinessSignup from '../screens/auth/BusinessSignup';
+import BusMobileScreen from '../screens/auth/BusMobileScreen';
+import BusOtpScreen from '../screens/auth/BusOtpScreen';
+import BusVerifyEmail from '../screens/auth/BusVerifyEmail';
+import SubscriptionScreen from '../screens/auth/SubscriptionScreen';
+import PaymentScreen from '../screens/auth/PaymentScreen';
 
 const Stack = createStackNavigator();
 const WorldTab = () => {
@@ -36,10 +41,36 @@ const WorldTab = () => {
           name="OtherProfileScreen"
           component={OtherProfileScreen}
         />
+        {/* BUSINESS CREATE FLOW?? */}
         <Stack.Screen
-          name="BusinessListScreen"
-          component={BusinessListScreen}
           options={{headerShown: false}}
+          name="BusinessSignup"
+          component={BusinessSignup}
+        />
+        <Stack.Screen
+          options={{headerShown: false}}
+          name="BusMobileScreen"
+          component={BusMobileScreen}
+        />
+        <Stack.Screen
+          options={{headerShown: false}}
+          name="BusOtpScreen"
+          component={BusOtpScreen}
+        />
+        <Stack.Screen
+          options={{headerShown: false}}
+          name="BusVerifyEmail"
+          component={BusVerifyEmail}
+        />
+        <Stack.Screen
+          options={{headerShown: false}}
+          name="SubscriptionScreen"
+          component={SubscriptionScreen}
+        />
+        <Stack.Screen
+          options={{headerShown: false}}
+          name="PaymentScreen"
+          component={PaymentScreen}
         />
       </Stack.Navigator>
     </SafeAreaView>

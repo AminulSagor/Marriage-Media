@@ -25,6 +25,15 @@ const getTabBarVisibility = (route: Partial<Route<string>>) => {
   const routeName = getFocusedRouteNameFromRoute(route) ?? 'EventsScreen';
 
   const hideTabBarRoutes = [
+    'BusinessSignup',
+    'BusMobileScreen',
+    'BusOtpScreen',
+    'BusVerifyEmail',
+    'SubscriptionScreen',
+    'PaymentScreen',
+    'EditPersonalInfo',
+    'EditReligionDetails',
+    'EditAppearance',
     'SettingScreen',
     'WeddingServicesScreen',
     'FilterScreen',

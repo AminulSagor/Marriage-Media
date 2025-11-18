@@ -101,7 +101,13 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
         </TouchableOpacity> */}
 
         <TouchableOpacity
-          onPress={() => navigation?.navigate('SettingScreen')}
+          onPress={() => {
+            if (profile) {
+              navigation?.navigate('SettingScreen', {profile});
+            } else {
+              navigation?.navigate('SettingScreen'); // fallback – Settings will fetch
+            }
+          }}
           style={styles.settingsIcon}>
           <Icon name="settings-outline" size={24} color="#000" />
         </TouchableOpacity>
@@ -154,20 +160,15 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
           <View style={styles.userInfo}>
             <Text style={styles.name}>{nameWithAge}</Text>
             {!!location && <Text style={styles.location}>📍 {location}</Text>}
-            {/* Current location is missing in api response */}
-            {profile?.profession && (
-              <Text style={styles.subLocation}>Missing current location</Text>
-            )}
-
             <Text style={styles.bio}>
-              {`An honest ${profile?.profession || 'person'} from ${
+              {`${profile?.profession || 'person'} from ${
                 profile?.country || 'somewhere'
               }`}
             </Text>
           </View>
 
           {/* About Me */}
-          <View style={styles.section}>
+          {/* <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>About Me</Text>
               <Text style={styles.editTag}>Edit</Text>
@@ -184,13 +185,18 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
                   'Update your profile to tell others more about you.'}
               </Text>
             </View>
-          </View>
+          </View> */}
 
           {/* Appearance */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Appearance</Text>
-              <Text style={styles.editTag}>Edit</Text>
+              <TouchableOpacity
+                onPress={() =>
+                  navigation.navigate('EditAppearance', {profile})
+                }>
+                <Text style={styles.editTag}>Edit</Text>
+              </TouchableOpacity>
             </View>
             <View style={styles.tagRow}>
               {profile.height && (
@@ -236,7 +242,12 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Religion details</Text>
-              <Text style={styles.editTag}>Edit</Text>
+              <TouchableOpacity
+                onPress={() =>
+                  navigation.navigate('EditReligionDetails', {profile})
+                }>
+                <Text style={styles.editTag}>Edit</Text>
+              </TouchableOpacity>
             </View>
             <View style={styles.tagRow}>
               {profile.religion && (
@@ -265,7 +276,12 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Personal Info</Text>
-              <Text style={styles.editTag}>Edit</Text>
+              <TouchableOpacity
+                onPress={() =>
+                  navigation.navigate('EditPersonalInfo', {profile})
+                }>
+                <Text style={styles.editTag}>Edit</Text>
+              </TouchableOpacity>
             </View>
             <View style={styles.tagRow}>
               {profile.marital_status && (
@@ -289,7 +305,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
           </View>
 
           {/* Interests (placeholder for now) */}
-          <View style={styles.section}>
+          {/* <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Interests</Text>
               <Text style={styles.editTag}>Edit</Text>
@@ -305,7 +321,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
             <TouchableOpacity style={styles.addMore}>
               <Text style={styles.addMoreText}>Add more information +</Text>
             </TouchableOpacity>
-          </View>
+          </View> */}
 
           {/* Posts (from API) */}
           <View style={styles.section}>

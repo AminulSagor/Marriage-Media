@@ -156,3 +156,37 @@ export const createPost = async (
 
   return data;
 };
+
+export interface ReactPostResponse {
+  status: string; // "success"
+  message: string; // "Post reacted successfully"
+}
+
+/** POST /posts/react/{post_id} */
+export const reactToPost = async (
+  postId: number,
+): Promise<ReactPostResponse> => {
+  const {data} = await api.post<ReactPostResponse>(`/posts/react/${postId}`);
+  return data;
+};
+
+export interface AddCommentPayload {
+  post_id: number;
+  comment: string;
+}
+export interface AddCommentResponse {
+  status: string; // "success"
+  message: string; // "Commented successfully"
+}
+
+/** POST /posts/add-comment */
+export async function addComment(
+  payload: AddCommentPayload,
+): Promise<AddCommentResponse> {
+  // uses the shared axios `api` instance (interceptors included)
+  const {data} = await api.post<AddCommentResponse>('/posts/add-comment', {
+    post_id: payload.post_id,
+    comment: payload.comment,
+  });
+  return data;
+}

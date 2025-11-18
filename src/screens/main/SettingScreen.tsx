@@ -1,3 +1,4 @@
+// SettingsScreen.tsx
 import React from 'react';
 import {
   View,
@@ -9,11 +10,39 @@ import {
   ImageBackground,
   Modal,
 } from 'react-native';
-import {logout} from '../../api/auth';
 import Icon from 'react-native-vector-icons/Ionicons';
 import MaterialIcon from 'react-native-vector-icons/MaterialCommunityIcons';
+import {useQuery} from '@tanstack/react-query';
 
-const SettingsScreen = ({navigation}) => {
+import {logout} from '../../api/auth';
+import {fetchProfile, UserProfile} from '../../api/profile';
+
+type SettingsScreenProps = {
+  navigation: any;
+  route?: {params?: {profile?: UserProfile}};
+};
+
+const formatDate = (iso?: string | null) => {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return isNaN(d.getTime())
+    ? '—'
+    : d.toLocaleDateString(undefined, {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      });
+};
+
+const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation, route}) => {
+  const incoming = route?.params?.profile;
+  const {data: fetchedProfile} = useQuery({
+    queryKey: ['profile'],
+    queryFn: fetchProfile,
+    enabled: !incoming,
+  });
+  const profile: UserProfile | undefined = incoming ?? fetchedProfile;
+
   const [matchNoti, setMatchNoti] = React.useState(false);
   const [chatNoti, setChatNoti] = React.useState(false);
   const [emailSms, setEmailSms] = React.useState(false);
@@ -22,32 +51,36 @@ const SettingsScreen = ({navigation}) => {
 
   const handleLogout = async () => {
     setLogoutModal(false);
-
     await logout();
-
     const rootNav = navigation.getParent()?.getParent() ?? navigation;
-
-    rootNav.reset({
-      index: 0,
-      routes: [{name: 'Auth'}],
-    });
+    rootNav.reset({index: 0, routes: [{name: 'Auth'}]});
   };
 
+  // Always shows chevron and makes the whole row tappable
   const renderItem = (
-    icon,
-    label,
-    value = '',
+    icon: React.ReactNode,
+    label: string,
+    value: string = '',
     danger = false,
-    onPress = null,
+    onPress?: () => void,
   ) => (
-    <TouchableOpacity style={styles.item} onPress={onPress}>
+    <TouchableOpacity
+      style={styles.item}
+      onPress={onPress ?? (() => {})}
+      activeOpacity={0.7}>
       <View style={styles.itemLeft}>
         {icon}
-        <View style={{marginLeft: 10}}>
-          <Text style={[styles.itemText, danger && {color: 'red'}]}>
+        <View style={{marginLeft: 10, flexShrink: 1}}>
+          <Text
+            style={[styles.itemText, danger && {color: 'red'}]}
+            numberOfLines={1}>
             {label}
           </Text>
-          {value !== '' && <Text style={styles.subText}>{value}</Text>}
+          {!!value && (
+            <Text style={styles.subText} numberOfLines={1}>
+              {value}
+            </Text>
+          )}
         </View>
       </View>
       <Icon name="chevron-forward" size={20} color="#999" />
@@ -75,32 +108,64 @@ const SettingsScreen = ({navigation}) => {
             {renderItem(
               <Icon name="person-outline" size={20} />,
               'Name',
-              'Niaz Ahmed',
+              profile?.name || '—',
+              false,
+              () =>
+                navigation.navigate('EditPersonalInfo', {
+                  profile,
+                  openSection: 'name',
+                }),
             )}
             {renderItem(
               <Icon name="calendar-outline" size={20} />,
               'Date Of Birth',
-              'February 14, 2000',
+              formatDate(profile?.dob),
+              false,
+              () =>
+                navigation.navigate('EditPersonalInfo', {
+                  profile,
+                  openSection: 'dob',
+                }),
             )}
             {renderItem(
               <Icon name="male-outline" size={20} />,
               'Gender',
-              'Male',
+              profile?.gender || '—',
+              false,
+              () =>
+                navigation.navigate('EditPersonalInfo', {
+                  profile,
+                  openSection: 'gender',
+                }),
             )}
             {renderItem(
               <Icon name="mail-outline" size={20} />,
               'Email Address',
-              'yourmail@gmail.com',
+              (profile as any)?.email || '—',
+              false,
+              () =>
+                navigation.navigate('EditProfileScreen', {
+                  field: 'email',
+                  value: (profile as any)?.email || '',
+                }),
             )}
             {renderItem(
               <Icon name="call-outline" size={20} />,
               'Phone Number',
-              '03244214521',
+              (profile as any)?.phone || '—',
+              false,
+              () =>
+                navigation.navigate('EditProfileScreen', {
+                  field: 'phone',
+                  value: (profile as any)?.phone || '',
+                }),
             )}
             {renderItem(
               <Icon name="key-outline" size={20} />,
               'Change Password',
               'Change your password if you forgot it',
+              false,
+              () => navigation.navigate('ChangePasswordScreen'),
             )}
           </View>
 
@@ -131,7 +196,6 @@ const SettingsScreen = ({navigation}) => {
               false,
               () => navigation.navigate('BlockUnblockUsers'),
             )}
-
             {renderItem(
               <Icon name="person-circle-outline" size={20} />,
               'Profile I Visited',
@@ -139,7 +203,6 @@ const SettingsScreen = ({navigation}) => {
               false,
               () => navigation.navigate('ProfileVisited'),
             )}
-
             {renderItem(
               <Icon name="location-outline" size={20} />,
               'Locations Setting',
@@ -229,7 +292,7 @@ const SettingsScreen = ({navigation}) => {
             )}
           </View>
 
-          {/* Safety Tips Section */}
+          {/* Safety Tips */}
           <Text style={styles.sectionTitle}>Safety Tips</Text>
           <View style={styles.section}>
             {renderItem(
@@ -289,6 +352,7 @@ const SettingsScreen = ({navigation}) => {
               'Delete Or Deactivate Account',
               "Once you delete it, you can't get it back",
               true,
+              () => navigation.navigate('DeleteAccountScreen'),
             )}
             {renderItem(
               <Icon name="log-out-outline" size={20} />,
@@ -328,13 +392,8 @@ const SettingsScreen = ({navigation}) => {
 export default SettingsScreen;
 
 const styles = StyleSheet.create({
-  bg: {
-    flex: 1,
-  },
-  container: {
-    flex: 1,
-    paddingTop: 40,
-  },
+  bg: {flex: 1},
+  container: {flex: 1, paddingTop: 40},
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -342,11 +401,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     gap: 100,
   },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginLeft: 10,
-  },
+  headerTitle: {fontSize: 18, fontWeight: '600', marginLeft: 10},
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
@@ -370,21 +425,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0.5,
     borderBottomColor: '#eee',
   },
-  itemLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexShrink: 1,
-  },
-  itemText: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  subText: {
-    fontSize: 12,
-    color: '#888',
-    marginTop: 2,
-  },
-  // Modal styles
+  itemLeft: {flexDirection: 'row', alignItems: 'center', flexShrink: 1},
+  itemText: {fontSize: 14, fontWeight: '500'},
+  subText: {fontSize: 12, color: '#888', marginTop: 2},
+  // Modal
   modalContainer: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -404,10 +448,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 20,
   },
-  modalActions: {
-    flexDirection: 'row',
-    gap: 20,
-  },
+  modalActions: {flexDirection: 'row', gap: 20},
   noBtn: {
     backgroundColor: '#eee',
     paddingVertical: 10,
