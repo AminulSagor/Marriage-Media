@@ -1,4 +1,5 @@
-import React, {useState} from 'react';
+// src/screens/NearUser.tsx
+import React, {useMemo, useState} from 'react';
 import {
   View,
   Text,
@@ -7,12 +8,27 @@ import {
   TouchableOpacity,
   Image,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import {useQuery, useMutation, useQueryClient} from '@tanstack/react-query';
+
+import {
+  fetchFriendRequests,
+  FriendRequestItem,
+  getSendRequestList,
+  SentRequestItem,
+  acceptFriendRequest,
+} from '../../api/friends';
+import {fetchProfile} from '../../api/profile';
+import {API_BASE_URL} from '../../config/env';
 
 const {width} = Dimensions.get('window');
 
-const users = [
+const tabs = ['Likes me', 'Liked', 'Passed', 'Pings'];
+
+// demo data for other tabs
+const demoUsers = [
   {
     id: '1',
     name: 'Jak Devin',
@@ -35,21 +51,103 @@ const users = [
   },
 ];
 
-const tabs = ['Likes me', 'Liked', 'Passed', 'Pings'];
+const mapIncoming = (r: FriendRequestItem) => ({
+  id: String(r.request_id),
+  name: r.name,
+  image: r.pro_path
+    ? `${API_BASE_URL}/${r.pro_path}`
+    : 'https://randomuser.me/api/portraits/men/40.jpg',
+});
 
-const NearUser = ({navigation}) => {
-  const [activeTab, setActiveTab] = useState('Likes me');
+const mapSent = (r: SentRequestItem) => ({
+  id: String(r.request_id),
+  name: r.name,
+  image: r.pro_path
+    ? `${API_BASE_URL}/${r.pro_path}`
+    : 'https://randomuser.me/api/portraits/men/40.jpg',
+});
 
-  const renderUser = ({item}) => (
+const NearUser = ({navigation}: {navigation: any}) => {
+  const [activeTab, setActiveTab] = useState<
+    'Likes me' | 'Liked' | 'Passed' | 'Pings'
+  >('Likes me');
+  const queryClient = useQueryClient();
+
+  // current user avatar
+  const {data: me} = useQuery({
+    queryKey: ['me-profile'],
+    queryFn: fetchProfile,
+  });
+  const myAvatarUri = me?.pro_path
+    ? `${API_BASE_URL}/${me.pro_path}`
+    : 'https://images.unsplash.com/photo-1544005313-94ddf0286df2';
+
+  // Incoming requests → "Likes me"
+  const {
+    data: incomingData,
+    isLoading: incomingLoading,
+    isError: incomingError,
+    refetch: refetchIncoming,
+  } = useQuery({queryKey: ['friend-requests'], queryFn: fetchFriendRequests});
+
+  // Sent requests → "Liked"
+  const {
+    data: sentData,
+    isLoading: sentLoading,
+    isError: sentError,
+    refetch: refetchSent,
+  } = useQuery({queryKey: ['sent-requests'], queryFn: getSendRequestList});
+
+  // Accept request
+  const acceptMut = useMutation({
+    mutationFn: (requestId: number) => acceptFriendRequest(requestId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({queryKey: ['friend-requests']});
+    },
+  });
+
+  const likeMeUsers = useMemo(
+    () => (incomingData?.data ?? []).map(mapIncoming),
+    [incomingData],
+  );
+  const likedUsers = useMemo(() => (sentData ?? []).map(mapSent), [sentData]);
+
+  const listData =
+    activeTab === 'Likes me'
+      ? likeMeUsers
+      : activeTab === 'Liked'
+      ? likedUsers
+      : demoUsers;
+
+  const renderUser = ({
+    item,
+  }: {
+    item: {id: string; name: string; image: string};
+  }) => (
     <View style={styles.userCard}>
       <Image source={{uri: item.image}} style={styles.avatar} />
       <Text style={styles.name}>{item.name}</Text>
       <View style={styles.actions}>
-        <TouchableOpacity
-          onPress={() => navigation?.navigate('MatchScreen')}
-          style={styles.checkButton}>
-          <Icon name="check" size={22} color="white" />
-        </TouchableOpacity>
+        {/* ✅ Show tick for all tabs EXCEPT "Liked" */}
+        {activeTab !== 'Liked' && (
+          <TouchableOpacity
+            disabled={activeTab === 'Likes me' && acceptMut.isPending}
+            onPress={() => {
+              if (activeTab === 'Likes me') {
+                // accept and then navigate to match
+                acceptMut.mutate(Number(item.id), {
+                  onSuccess: () => navigation?.navigate('MatchScreen'),
+                });
+              } else {
+                // Passed / Pings → just navigate
+                navigation?.navigate('MatchScreen');
+              }
+            }}
+            style={styles.checkButton}>
+            <Icon name="check" size={22} color="white" />
+          </TouchableOpacity>
+        )}
+
         <TouchableOpacity style={styles.crossButton}>
           <Icon name="close" size={22} color="white" />
         </TouchableOpacity>
@@ -57,21 +155,50 @@ const NearUser = ({navigation}) => {
     </View>
   );
 
+  const renderLoadingOrError = () => {
+    const isLoading = activeTab === 'Likes me' ? incomingLoading : sentLoading;
+    const isError = activeTab === 'Likes me' ? incomingError : sentError;
+    const refetch = activeTab === 'Likes me' ? refetchIncoming : refetchSent;
+
+    if (isLoading) {
+      return (
+        <View style={{alignItems: 'center', marginTop: 16}}>
+          <ActivityIndicator />
+          <Text style={{color: '#666', marginTop: 6}}>Loading…</Text>
+        </View>
+      );
+    }
+    if (isError) {
+      return (
+        <View style={{alignItems: 'center', marginTop: 16}}>
+          <Text style={{color: '#dc2626', marginBottom: 8}}>
+            Failed to load {activeTab.toLowerCase()} list.
+          </Text>
+          <TouchableOpacity onPress={() => refetch()}>
+            <Text style={{color: '#2563eb'}}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    return null;
+  };
+
+  const showLoaderOrError =
+    (activeTab === 'Likes me' && (incomingLoading || incomingError)) ||
+    (activeTab === 'Liked' && (sentLoading || sentError));
+
   return (
     <View style={styles.container}>
-      {/* Top Avatar */}
-      <Image
-        source={{uri: 'https://randomuser.me/api/portraits/men/1.jpg'}}
-        style={styles.topAvatar}
-      />
+      {/* Top Avatar = current user */}
+      <Image source={{uri: myAvatarUri}} style={styles.topAvatar} />
 
       {/* Tabs */}
       <View style={styles.tabContainer}>
-        {tabs.map((tab, i) => (
+        {tabs.map(tab => (
           <TouchableOpacity
-            key={i}
+            key={tab}
             style={[styles.tab, activeTab === tab && styles.activeTab]}
-            onPress={() => setActiveTab(tab)}>
+            onPress={() => setActiveTab(tab as any)}>
             <Text
               style={[
                 styles.tabText,
@@ -88,13 +215,22 @@ const NearUser = ({navigation}) => {
         ))}
       </View>
 
-      {/* List */}
-      <FlatList
-        data={users}
-        keyExtractor={item => item.id}
-        renderItem={renderUser}
-        contentContainerStyle={{paddingTop: 10}}
-      />
+      {/* List / States */}
+      {showLoaderOrError ? (
+        renderLoadingOrError()
+      ) : (
+        <FlatList
+          data={listData}
+          keyExtractor={item => item.id}
+          renderItem={renderUser}
+          contentContainerStyle={{paddingTop: 10}}
+          ListEmptyComponent={
+            <View style={{alignItems: 'center', marginTop: 16}}>
+              <Text style={{color: '#666'}}>No users to show.</Text>
+            </View>
+          }
+        />
+      )}
     </View>
   );
 };
@@ -129,16 +265,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  activeTab: {
-    backgroundColor: '#fff',
-  },
-  tabText: {
-    fontWeight: '600',
-    color: '#666',
-  },
-  activeTabText: {
-    color: '#000',
-  },
+  activeTab: {backgroundColor: '#fff'},
+  tabText: {fontWeight: '600', color: '#666'},
+  activeTabText: {color: '#000'},
   badge: {
     backgroundColor: '#FF2F6C',
     borderRadius: 10,
@@ -146,11 +275,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
   },
-  badgeText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
+  badgeText: {color: '#fff', fontSize: 10, fontWeight: 'bold'},
   userCard: {
     backgroundColor: '#fff',
     borderRadius: 30,
@@ -161,31 +286,11 @@ const styles = StyleSheet.create({
     shadowColor: '#000',
     elevation: 2,
   },
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    marginRight: 12,
-  },
-  name: {
-    fontSize: 16,
-    fontWeight: '600',
-    flex: 1,
-  },
-  actions: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  checkButton: {
-    backgroundColor: '#FFC0CB',
-    padding: 8,
-    borderRadius: 20,
-  },
-  crossButton: {
-    backgroundColor: '#FF5A76',
-    padding: 8,
-    borderRadius: 20,
-  },
+  avatar: {width: 48, height: 48, borderRadius: 24, marginRight: 12},
+  name: {fontSize: 16, fontWeight: '600', flex: 1},
+  actions: {flexDirection: 'row', gap: 10},
+  checkButton: {backgroundColor: '#FFC0CB', padding: 8, borderRadius: 20},
+  crossButton: {backgroundColor: '#FF5A76', padding: 8, borderRadius: 20},
 });
 
 export default NearUser;

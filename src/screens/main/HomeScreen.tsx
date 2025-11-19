@@ -1,4 +1,4 @@
-import React, {useState, useRef} from 'react';
+import React, {useRef, useState} from 'react';
 import {
   View,
   Text,
@@ -17,6 +17,7 @@ import Feather from 'react-native-vector-icons/Feather';
 import {
   useInfiniteQuery,
   useMutation,
+  useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
 
@@ -26,9 +27,12 @@ import {
   FeedPost,
   createPost,
   PostImageFile,
-  reactToPost, // <- make sure this exists in api/posts
+  reactToPost,
 } from '../../api/posts';
 import {API_BASE_URL} from '../../config/env';
+
+// NEW: friends API
+import {fetchFriendList, Friend} from '../../api/friends';
 
 // gesture-handler
 import {Gesture, GestureDetector} from 'react-native-gesture-handler';
@@ -41,13 +45,6 @@ import CommentsBottomSheet from '../../Components/CommentsBottomSheet';
 interface HomeScreenProps {
   navigation: any;
 }
-
-const stories = [
-  {id: '1', name: 'My Story', image: require('../../assets/images/img2.png')},
-  {id: '2', name: 'Salina', image: require('../../assets/images/img1.png')},
-  {id: '3', name: 'Laisa', image: require('../../assets/images/pic10.png')},
-  {id: '4', name: 'Niaz', image: require('../../assets/images/img1.png')},
-];
 
 const PAGE_SIZE = 10;
 
@@ -67,13 +64,9 @@ const PostCard: React.FC<{
 
   // heart animation
   const scale = useRef(new Animated.Value(0)).current;
-  const opacity = scale.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 1],
-  });
+  const opacity = scale.interpolate({inputRange: [0, 1], outputRange: [0, 1]});
 
   const showHeart = () => {
-    // pop in, hold briefly, fade out
     scale.setValue(0);
     Animated.sequence([
       Animated.timing(scale, {
@@ -92,13 +85,13 @@ const PostCard: React.FC<{
     ]).start();
   };
 
-  const singleTap = Gesture.Tap(); // reserved for exclusivity
+  const singleTap = Gesture.Tap();
   const doubleTap = Gesture.Tap()
     .numberOfTaps(2)
     .maxDelay(250)
     .onEnd(() => {
-      showHeart(); // visual feedback immediately
-      onDoubleTapReact(item.id); // call API
+      showHeart();
+      onDoubleTapReact(item.id);
     });
 
   const tapGesture = Gesture.Exclusive(doubleTap, singleTap);
@@ -186,6 +179,18 @@ const HomeScreen: React.FC<HomeScreenProps> = ({navigation}) => {
 
   const queryClient = useQueryClient();
 
+  // --- NEW: Friends (replaces stories) ---
+  const {
+    data: friends = [],
+    isLoading: loadingFriends,
+    isError: friendsError,
+    refetch: refetchFriends,
+  } = useQuery<Friend[]>({
+    queryKey: ['all-friends'],
+    queryFn: fetchFriendList,
+  });
+
+  // Feed
   const {
     data,
     isLoading,
@@ -261,14 +266,26 @@ const HomeScreen: React.FC<HomeScreenProps> = ({navigation}) => {
     reactMutation.mutate(postId);
   };
 
-  const renderStory = ({item}: {item: (typeof stories)[number]}) => (
-    <TouchableOpacity
-      onPress={() => navigation?.navigate('OtherProfileScreen')}
-      style={styles.storyItem}>
-      <Image source={item.image} style={styles.storyImage} />
-      <Text style={styles.storyText}>{item.name}</Text>
-    </TouchableOpacity>
-  );
+  // --- NEW: friend card (story replacement) ---
+  const renderFriend = ({item}: {item: Friend}) => {
+    const uri = item.pro_path ? `${API_BASE_URL}/${item.pro_path}` : undefined;
+    return (
+      <TouchableOpacity
+        onPress={() =>
+          navigation?.navigate('OtherProfileScreen', {userId: item.user_id})
+        }
+        style={styles.storyItem}>
+        {uri ? (
+          <Image source={{uri}} style={styles.storyImage} />
+        ) : (
+          <View style={[styles.storyImage, {backgroundColor: '#eee'}]} />
+        )}
+        <Text numberOfLines={1} style={styles.storyText}>
+          {item.name || 'Friend'}
+        </Text>
+      </TouchableOpacity>
+    );
+  };
 
   const renderListHeader = () => (
     <>
@@ -288,13 +305,34 @@ const HomeScreen: React.FC<HomeScreenProps> = ({navigation}) => {
         </View>
       </View>
 
+      {/* Friends strip (replaces stories) */}
       <FlatList
-        data={stories}
-        renderItem={renderStory}
+        data={friends}
+        renderItem={renderFriend}
         horizontal
-        keyExtractor={item => item.id}
+        keyExtractor={(item, idx) => `${item.user_id}-${idx}`}
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.storiesContainer}
+        ListEmptyComponent={
+          <View style={[styles.storiesContainer, {paddingVertical: 8}]}>
+            {loadingFriends ? (
+              <View style={{flexDirection: 'row', alignItems: 'center'}}>
+                <ActivityIndicator />
+                <Text style={{marginLeft: 8, color: '#666'}}>
+                  Loading friends…
+                </Text>
+              </View>
+            ) : friendsError ? (
+              <TouchableOpacity onPress={() => refetchFriends()}>
+                <Text style={{color: '#dc2626'}}>
+                  Failed to load friends. Tap to retry.
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              <Text style={{color: '#666'}}>No friends found.</Text>
+            )}
+          </View>
+        }
       />
 
       {isLoading && (
@@ -415,9 +453,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({navigation}) => {
 
 export default HomeScreen;
 
+// styles unchanged
 const styles = StyleSheet.create({
   container: {flex: 1, backgroundColor: '#fff', paddingTop: 40},
-
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -426,9 +464,8 @@ const styles = StyleSheet.create({
   },
   headerIcons: {flexDirection: 'row', marginLeft: 'auto'},
   icon: {marginRight: 12},
-
   storiesContainer: {paddingHorizontal: 10, marginBottom: 15},
-  storyItem: {alignItems: 'center', marginRight: 14},
+  storyItem: {alignItems: 'center', marginRight: 14, width: 70},
   storyImage: {
     width: 60,
     height: 60,
@@ -437,7 +474,6 @@ const styles = StyleSheet.create({
     borderColor: 'deeppink',
   },
   storyText: {marginTop: 5, fontSize: 12, color: '#333'},
-
   postContainer: {
     backgroundColor: '#f9f9f9',
     marginBottom: 15,
@@ -458,7 +494,6 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   postText: {fontSize: 13, color: '#333', marginTop: 8},
-
   fab: {
     position: 'absolute',
     bottom: 110,
@@ -471,7 +506,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     elevation: 8,
   },
-
   center: {alignItems: 'center', justifyContent: 'center', paddingVertical: 12},
   loadingText: {marginTop: 4, fontSize: 12, color: '#666'},
   errorText: {
@@ -481,7 +515,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: 16,
   },
-
   modalOverlay: {
     flex: 1,
     justifyContent: 'center',
@@ -508,7 +541,6 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 8,
   },
-
   heartOverlay: {
     position: 'absolute',
     top: '35%',

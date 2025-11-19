@@ -6,25 +6,116 @@ import {
   Image,
   TouchableOpacity,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import {SafeAreaView} from 'react-native-safe-area-context';
+import {useQuery} from '@tanstack/react-query';
+import {
+  NavigationProp,
+  ParamListBase,
+  RouteProp,
+  useNavigation,
+  useRoute,
+} from '@react-navigation/native';
 
-const OtherProfileScreen = ({navigation}) => {
+import {fetchFriendProfile} from '../../api/friends';
+import {API_BASE_URL} from '../../config/env';
+
+// If you have a concrete stack, replace ParamListBase with your RootStackParamList
+type OtherProfileRoute = RouteProp<ParamListBase, string>;
+
+const OtherProfileScreen: React.FC = () => {
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
+  const route = useRoute<OtherProfileRoute>();
+  const userId: number | undefined = (route.params as any)?.userId;
+
+  const {
+    data: profile,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery({
+    queryKey: ['friend-profile', userId],
+    queryFn: () => fetchFriendProfile(Number(userId)),
+    enabled: !!userId,
+  });
+
+  const valueOrMissing = (v: any) =>
+    v !== undefined && v !== null && String(v).trim() !== ''
+      ? String(v)
+      : 'Missing in api';
+
+  const computeAge = (dob?: string | null) => {
+    if (!dob) return undefined;
+    const d = new Date(dob);
+    if (isNaN(d.getTime())) return undefined;
+    const diff = Date.now() - d.getTime();
+    const ageDate = new Date(diff);
+    return Math.abs(ageDate.getUTCFullYear() - 1970);
+  };
+
+  const age = computeAge(profile?.dob);
+  const nameLine =
+    valueOrMissing(profile?.name) + (age !== undefined ? `, ${age}` : '');
+
+  const locationLine = (() => {
+    const loc = [profile?.city, profile?.country].filter(Boolean).join(', ');
+    return valueOrMissing(loc);
+  })();
+
+  const headerImage = profile?.pro_path
+    ? {uri: `${API_BASE_URL}/${profile.pro_path}`}
+    : {uri: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2'};
+
+  if (!userId) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={{alignItems: 'center', marginTop: 40}}>
+          <Text style={{color: '#dc2626'}}>
+            No userId passed to this screen.
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={{alignItems: 'center', marginTop: 40}}>
+          <ActivityIndicator />
+          <Text style={{marginTop: 6, color: '#666'}}>Loading profile…</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (isError) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={{alignItems: 'center', marginTop: 40}}>
+          <Text style={{color: '#dc2626', marginBottom: 10}}>
+            Failed to load profile.
+          </Text>
+          <TouchableOpacity onPress={() => refetch()}>
+            <Text style={{color: '#2563eb'}}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Profile Image */}
-        {/* Profile Image */}
         <View style={styles.imageContainer}>
-          <Image
-            source={require('../../assets/images/pic22.png')}
-            style={styles.profileImage}
-          />
+          <Image source={headerImage} style={styles.profileImage} />
 
           {/* Back & Notification */}
           <TouchableOpacity
-            onPress={() => navigation?.goBack()}
+            onPress={() => navigation.goBack()}
             style={styles.backButton}>
             <Ionicons name="chevron-back" size={22} color="#000" />
           </TouchableOpacity>
@@ -49,28 +140,27 @@ const OtherProfileScreen = ({navigation}) => {
           </View>
         </View>
 
-        {/* Action Buttons */}
-        {/* Action Buttons */}
+        {/* Action Icons (no outer boxes) */}
         <View style={styles.actionRow}>
-          <TouchableOpacity style={styles.actinBtn}>
+          <TouchableOpacity style={styles.actionIcon}>
             <Image
-              source={require('../../assets/images/one.png')} // 👈 your wink image
+              source={require('../../assets/images/one.png')}
               style={styles.actionImg}
               resizeMode="contain"
             />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.actiontn}>
+          <TouchableOpacity style={styles.actionIcon}>
             <Image
-              source={require('../../assets/images/onee.png')} // 👈 your wink image
+              source={require('../../assets/images/onee.png')}
               style={styles.actionImg}
               resizeMode="contain"
             />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.actioBtn}>
+          <TouchableOpacity style={styles.actionIcon}>
             <Image
-              source={require('../../assets/images/oneee.png')} // 👈 your wink image
+              source={require('../../assets/images/oneee.png')}
               style={styles.actionImg}
               resizeMode="contain"
             />
@@ -85,36 +175,43 @@ const OtherProfileScreen = ({navigation}) => {
 
         {/* Profile Info */}
         <View style={styles.section}>
-          <Text style={styles.name}>Niaz Uddin, 28</Text>
-          <Text style={styles.location}>📍 Rome, Italy</Text>
-          <Text style={styles.location}>Current: Lisbon, Australia</Text>
-          <Text style={styles.subText}>An honest guy from Italy</Text>
+          <Text style={styles.name}>{nameLine}</Text>
+          <Text style={styles.location}>📍 {locationLine}</Text>
         </View>
-
-        {/* About Me */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>About Me</Text>
-          <View style={styles.card}>
-            <Text style={styles.cardText}>
-              Hi, I am Niaz Uddin. mawmnd po qwdqdma camasd adkdwa, aesocm...
-            </Text>
-          </View>
-        </View>
-
         {/* Appearance */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Appearance</Text>
           <View style={styles.tagRow}>
-            <Text style={styles.tag}>Height : 175 cm</Text>
-            <Text style={styles.tag}>Weight : 68 kg</Text>
+            <Text style={styles.tag}>
+              Height : {valueOrMissing(profile?.height)}{' '}
+              {typeof profile?.height === 'number' ||
+              /[0-9]/.test(String(profile?.height))
+                ? 'cm'
+                : ''}
+            </Text>
+            <Text style={styles.tag}>
+              Weight : {valueOrMissing(profile?.weight)}{' '}
+              {typeof profile?.weight === 'number' ||
+              /[0-9]/.test(String(profile?.weight))
+                ? 'kg'
+                : ''}
+            </Text>
           </View>
           <View style={styles.tagRow}>
-            <Text style={styles.tag}>Body : Muscular</Text>
-            <Text style={styles.tag}>Hair : Brown</Text>
+            <Text style={styles.tag}>
+              Body : {valueOrMissing(profile?.body_type)}
+            </Text>
+            <Text style={styles.tag}>
+              Hair : {valueOrMissing(profile?.hair_color)}
+            </Text>
           </View>
           <View style={styles.tagRow}>
-            <Text style={styles.tag}>Eye : Black</Text>
-            <Text style={styles.tag}>Skin : White</Text>
+            <Text style={styles.tag}>
+              Eye : {valueOrMissing(profile?.eye_color)}
+            </Text>
+            <Text style={styles.tag}>
+              Skin : {valueOrMissing(profile?.skin_color)}
+            </Text>
           </View>
         </View>
 
@@ -122,42 +219,47 @@ const OtherProfileScreen = ({navigation}) => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Religion details</Text>
           <View style={styles.tagRow}>
-            <Text style={styles.tag}>Islam</Text>
-            <Text style={styles.tag}>Sunni</Text>
+            <Text style={styles.tag}>{valueOrMissing(profile?.religion)}</Text>
+            <Text style={styles.tag}>
+              {valueOrMissing(profile?.religion_section)}
+            </Text>
           </View>
-          <Text style={styles.tag}>Prayer: 5 times a day</Text>
-          <Text style={styles.tag}>No specific dresscode</Text>
+          <Text style={styles.tag}>
+            Prayer: {valueOrMissing(profile?.prayer_frequency)}
+          </Text>
+          <Text style={styles.tag}>
+            Dress code: {valueOrMissing(profile?.dress_code)}
+          </Text>
         </View>
 
         {/* Personal Info */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Personal Info</Text>
           <View style={styles.tagRow}>
-            <Text style={styles.tag}>Never married</Text>
-            <Text style={styles.tag}>Master's degree</Text>
+            <Text style={styles.tag}>
+              {valueOrMissing(profile?.marital_status)}
+            </Text>
+            <Text style={styles.tag}>{valueOrMissing(profile?.education)}</Text>
           </View>
-          <Text style={styles.tag}>Engineer</Text>
-        </View>
-
-        {/* Interests */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Interests</Text>
-          <View style={styles.tagRow}>
-            <Text style={styles.tag}>Shopping</Text>
-            <Text style={styles.tag}>Traveling</Text>
-          </View>
+          <Text style={styles.tag}>{valueOrMissing(profile?.profession)}</Text>
         </View>
 
         {/* Preferences */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Preferences</Text>
           <View style={styles.tagRow}>
-            <Text style={styles.tag}>Gender: Female</Text>
-            <Text style={styles.tag}>Age: 25-30</Text>
+            <Text style={styles.tag}>Gender: {valueOrMissing(undefined)}</Text>
+            <Text style={styles.tag}>
+              Age:{' '}
+              {profile?.prefered_partner_age_start != null &&
+              profile?.prefered_partner_age_end != null
+                ? `${profile.prefered_partner_age_start}-${profile.prefered_partner_age_end}`
+                : 'Missing in api'}
+            </Text>
           </View>
         </View>
 
-        {/* Posts */}
+        {/* Posts (placeholder) */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Posts</Text>
           <View style={styles.postRow}>
@@ -225,28 +327,24 @@ const styles = StyleSheet.create({
     marginVertical: 4,
   },
 
+  // Icons row (no boxes)
   actionRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     marginTop: -25,
   },
-  actionBtn: {
-    backgroundColor: '#fff',
-    padding: 10,
-    borderRadius: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 3,
+  actionIcon: {
+    backgroundColor: 'transparent',
+    padding: 0,
+    borderRadius: 0,
+    elevation: 0,
   },
-  actionImg: {
-    width: 65,
-    height: 65,
-  },
+  actionImg: {width: 65, height: 65},
 
-  actionText: {fontWeight: 'bold', color: '#E91E63'},
   tabRow: {flexDirection: 'row', justifyContent: 'center', marginVertical: 10},
   tabText: {fontSize: 16, marginHorizontal: 20, color: '#999'},
   activeTab: {fontWeight: 'bold', color: '#000'},
+
   section: {marginHorizontal: 20, marginTop: 15, marginBottom: 20},
   name: {fontSize: 22, fontWeight: 'bold', color: '#000'},
   location: {fontSize: 14, color: '#444', marginTop: 2},

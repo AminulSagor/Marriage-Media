@@ -159,7 +159,12 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
           {/* User Info */}
           <View style={styles.userInfo}>
             <Text style={styles.name}>{nameWithAge}</Text>
-            {!!location && <Text style={styles.location}>📍 {location}</Text>}
+            {!!location && (
+              <View style={styles.locLine}>
+                <Icon name="location-sharp" size={14} color="#333" />
+                <Text style={styles.location}>{location}</Text>
+              </View>
+            )}
             <Text style={styles.bio}>
               {`${profile?.profession || 'person'} from ${
                 profile?.country || 'somewhere'
@@ -358,9 +363,9 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
                       <View key={post.id} style={styles.postItem}>
                         <Image source={{uri}} style={styles.postImage} />
                         <View style={styles.overlay}>
-                          <Text style={styles.overlayText}>
-                            {posts.length - 2}+
-                          </Text>
+                          <Text style={styles.overlayText}>{`${
+                            posts.length - 2
+                          }+`}</Text>
                         </View>
                       </View>
                     );
@@ -559,5 +564,10 @@ const styles = StyleSheet.create({
     color: '#dc2626',
     textAlign: 'center',
     paddingHorizontal: 16,
+  },
+  locLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
   },
 });

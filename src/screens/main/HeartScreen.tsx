@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {
   View,
   Text,
@@ -8,156 +8,201 @@ import {
   Dimensions,
   SafeAreaView,
   ScrollView,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
 } from 'react-native';
 import Swiper from 'react-native-deck-swiper';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import Feather from 'react-native-vector-icons/Feather';
+import {useInfiniteQuery, useMutation, useQuery} from '@tanstack/react-query';
+
+import {
+  fetchFriendSuggestions,
+  FriendSuggestion,
+  sendFriendRequest,
+  FriendSuggestionParams,
+} from '../../api/friends';
+import {fetchProfile} from '../../api/profile';
+import {API_BASE_URL} from '../../config/env';
+import {useFilterStore, FilterValues} from '../../state/filterStore';
 
 const {width, height} = Dimensions.get('window');
 
-// Flame Users
-const flameUsers = [
-  {
-    id: 1,
-    name: 'Niaz Uddin',
-    location: 'Rome, Italy',
-    likes: '0.2k',
-    image: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde',
-  },
-  {
-    id: 2,
-    name: 'Sarah Khan',
-    location: 'Paris, France',
-    likes: '1.1k',
-    image: 'https://images.unsplash.com/photo-1531123897727-8f129e1688ce',
-  },
-  {
-    id: 3,
-    name: 'David Miller',
-    location: 'Berlin, Germany',
-    likes: '876',
-    image: 'https://images.unsplash.com/photo-1552058544-f2b08422138a',
-  },
-  {
-    id: 4,
-    name: 'Emily Brown',
-    location: 'New York, USA',
-    likes: '2.1k',
-    image: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2',
-  },
-];
+type CardUser = {
+  id: number;
+  name: string;
+  location: string;
+  image: string;
+};
 
-// Discover Users (6)
-const discoverUsers = [
-  {
-    id: 6,
-    name: 'Alice Cooper',
-    location: 'London, UK',
-    likes: '3.4k',
-    image: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d',
-  },
-  {
-    id: 7,
-    name: 'Michael Smith',
-    location: 'Toronto, Canada',
-    likes: '1.9k',
-    image: 'https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e',
-  },
-  {
-    id: 8,
-    name: 'Sophia Loren',
-    location: 'Madrid, Spain',
-    likes: '2.7k',
-    image: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1',
-  },
-  {
-    id: 9,
-    name: 'James Bond',
-    location: 'London, UK',
-    likes: '4.1k',
-    image: 'https://images.unsplash.com/photo-1527980965255-d3b416303d12',
-  },
-  {
-    id: 10,
-    name: 'Isabella Rossi',
-    location: 'Rome, Italy',
-    likes: '2.3k',
-    image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d',
-  },
-  {
-    id: 11,
-    name: 'Ethan Hunt',
-    location: 'Sydney, Australia',
-    likes: '3.0k',
-    image: 'https://images.unsplash.com/photo-1544723795-3fb6469f5b39',
-  },
-];
+const PAGE_SIZE = 20;
 
-// Premium Users (6)
-const premiumUsers = [
-  {
-    id: 12,
-    name: 'Olivia Martinez',
-    location: 'Mexico City, Mexico',
-    likes: '5.2k',
-    image: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2',
-  },
-  {
-    id: 13,
-    name: 'William Johnson',
-    location: 'Chicago, USA',
-    likes: '4.5k',
-    image: 'https://images.unsplash.com/photo-1546456073-6712f79251bb',
-  },
-  {
-    id: 14,
-    name: 'Emma Wilson',
-    location: 'Melbourne, Australia',
-    likes: '3.7k',
-    image: 'https://images.unsplash.com/photo-1532074205216-d0e1f4b87368',
-  },
-  {
-    id: 15,
-    name: 'Liam Anderson',
-    location: 'Oslo, Norway',
-    likes: '2.9k',
-    image: 'https://images.unsplash.com/photo-1548142813-c348350df52b',
-  },
-  {
-    id: 16,
-    name: 'Ava Taylor',
-    location: 'Dubai, UAE',
-    likes: '6.0k',
-    image: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2',
-  },
-  {
-    id: 17,
-    name: 'Noah Davis',
-    location: 'Los Angeles, USA',
-    likes: '5.8k',
-    image: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e',
-  },
-];
+const mapSuggestionToCard = (s: FriendSuggestion): CardUser => ({
+  id: s.id,
+  name: s.name,
+  location: `${s.city ?? ''}${s.city && s.country ? ', ' : ''}${
+    s.country ?? ''
+  }`,
+  image: s.pro_path
+    ? `${API_BASE_URL}/${s.pro_path}`
+    : 'https://images.unsplash.com/photo-1544005313-94ddf0286df2',
+});
 
-const HeartScreen = ({navigation}) => {
-  const [cards, setCards] = useState(flameUsers);
-  const [activeTab, setActiveTab] = useState('Flame'); // 🔥 Track active tab
+// Remove "Any"/empty values so queryKey/payload stay clean
+const cleanFilters = (f?: FilterValues) => {
+  if (!f) return {};
+  const out: Record<string, any> = {};
+  const put = (k: string, v: any, skipAny = true) => {
+    if (v === undefined || v === null || v === '') return;
+    if (skipAny && typeof v === 'string' && v.toLowerCase() === 'any') return;
+    out[k] = v;
+  };
+  Object.entries(f).forEach(([k, v]) => put(k, v));
+  return out;
+};
+
+// Map UI filter keys -> FriendSuggestionParams for API
+const mapToApiParams = (
+  f: Record<string, any>,
+  page: number,
+): FriendSuggestionParams => {
+  const payload: FriendSuggestionParams = {
+    page,
+    limit: PAGE_SIZE,
+    ...(f.gender && {gender: f.gender}),
+    ...(f.country && {country: f.country}),
+    ...(f.city && {city: f.city}),
+    ...(f.religion && {religion: f.religion}),
+    ...(f.sect && {religion_section: f.sect}),
+    ...(f.maritalStatus && {marital_status: f.maritalStatus}),
+    ...(f.occupation && {profession: f.occupation}),
+    ...(f.education && {education: f.education}),
+    ...(f.ethnicity && {ethnicity: f.ethnicity}),
+    ...(f.bodyType && {body_type: f.bodyType}),
+    ...(f.hair && {hair_color: f.hair}),
+    ...(f.eye && {eye_color: f.eye}),
+    ...(f.skin && {skin_color: f.skin}),
+    // Not in API yet (left here for future):
+    // age_min: f.ageMin,
+    // age_max: f.ageMax,
+    // distance_km: f.distance,
+    // height_cm / height_ft via height + heightUnit
+    // weight_kg / weight_lbs via weight + weightUnit
+  };
+  return payload;
+};
+
+const HeartScreen = ({navigation}: {navigation: any}) => {
+  const [activeTab, setActiveTab] = useState<'Flame' | 'Discover' | 'Premium'>(
+    'Flame',
+  );
+  const swiperRef = useRef<Swiper<CardUser> | null>(null);
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  // Shared persistent filters
+  const {filters, hydrated} = useFilterStore();
+  const cleaned = useMemo(() => cleanFilters(filters), [filters]);
+  const cleanedKey = useMemo(() => JSON.stringify(cleaned), [cleaned]);
+
+  // Profile (avatar)
+  const {data: me} = useQuery({
+    queryKey: ['me-profile'],
+    queryFn: fetchProfile,
+  });
+  const myAvatarUri = me?.pro_path
+    ? `${API_BASE_URL}/${me.pro_path}`
+    : 'https://randomuser.me/api/portraits/men/40.jpg';
+
+  // Send-request
+  const sendReq = useMutation({
+    mutationFn: (receiverId: number) => sendFriendRequest(receiverId),
+  });
+
+  // Suggestions with filters
+  const {
+    data,
+    isLoading,
+    isError,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
+    queryKey: ['friend-suggestions', PAGE_SIZE, cleanedKey],
+    initialPageParam: 1,
+    enabled: hydrated,
+    queryFn: async ({pageParam}) => {
+      const page = pageParam as number;
+      const params = mapToApiParams(cleaned, page);
+      return fetchFriendSuggestions(params);
+    },
+    getNextPageParam: last => {
+      if (!last?.totalPages) return undefined;
+      return last.page < last.totalPages ? last.page + 1 : undefined;
+    },
+  });
+
+  const suggestions: FriendSuggestion[] =
+    data?.pages.flatMap(p => p.data ?? []) ?? [];
+
+  const flameCards = useMemo(
+    () => suggestions.map(mapSuggestionToCard),
+    [suggestions],
+  );
+  const discoverCards = useMemo(
+    () => suggestions.map(mapSuggestionToCard),
+    [suggestions],
+  );
+  const premiumCards = useMemo(
+    () => suggestions.map(mapSuggestionToCard),
+    [suggestions],
+  );
+
+  const cards =
+    activeTab === 'Flame'
+      ? flameCards
+      : activeTab === 'Discover'
+      ? discoverCards
+      : premiumCards;
+
+  // Reset index only when tab or filters change
+  useEffect(() => {
+    setCurrentIndex(0);
+  }, [activeTab, cleanedKey]);
+
+  const prefetchOnSwipe = (idx: number) => {
+    if (hasNextPage && !isFetchingNextPage && idx >= cards.length - 5) {
+      fetchNextPage();
+    }
+  };
+
+  const onGridScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const {layoutMeasurement, contentOffset, contentSize} = e.nativeEvent;
+    const nearEnd =
+      layoutMeasurement.height + contentOffset.y >= contentSize.height - 400;
+    if (nearEnd && hasNextPage && !isFetchingNextPage) fetchNextPage();
+  };
+
+  const handleDislike = () => swiperRef.current?.swipeLeft();
+
+  const handleLike = () => {
+    const card = cards[currentIndex];
+    if (card?.id) sendReq.mutate(card.id);
+    swiperRef.current?.swipeRight();
+  };
+
+  const openFilters = () => {
+    navigation?.navigate('FilterScreen');
+  };
+
+  const stackCount = Math.max(1, Math.min(5, cards.length || 1));
+  const loop = cards.length > 1;
 
   return (
     <SafeAreaView style={styles.container}>
       {/* Top Header */}
       <View style={styles.topBar}>
-        <Image
-          source={{uri: 'https://i.pravatar.cc/100'}}
-          style={styles.avatar}
-        />
-        <Text style={styles.heading}>
-          {activeTab === 'Flame'
-            ? 'Flame'
-            : activeTab === 'Discover'
-            ? 'Discover'
-            : 'Premium'}
-        </Text>
+        <Image source={{uri: myAvatarUri}} style={styles.avatar} />
+        <Text style={styles.heading}>{activeTab}</Text>
         <TouchableOpacity
           onPress={() => navigation?.navigate('NearUser')}
           style={styles.scanBtn}>
@@ -168,10 +213,10 @@ const HeartScreen = ({navigation}) => {
         </TouchableOpacity>
       </View>
 
-      {/* Sub Header */}
+      {/* Tabs + Filters */}
       <View style={styles.subHeader}>
         <View style={styles.tabRow}>
-          {['Flame', 'Discover', 'Premium'].map(tab => (
+          {(['Flame', 'Discover', 'Premium'] as const).map(tab => (
             <TouchableOpacity key={tab} onPress={() => setActiveTab(tab)}>
               <Text
                 style={[styles.tabText, activeTab === tab && styles.activeTab]}>
@@ -180,72 +225,115 @@ const HeartScreen = ({navigation}) => {
             </TouchableOpacity>
           ))}
         </View>
-        <TouchableOpacity onPress={() => navigation?.navigate('FilterScreen')}>
+        <TouchableOpacity onPress={openFilters}>
           <Feather name="sliders" size={22} color="#333" />
         </TouchableOpacity>
       </View>
 
-      {/* Tabs Content */}
       <View style={{flex: 1}}>
-        {activeTab === 'Flame' && (
+        {activeTab === 'Flame' ? (
           <View style={styles.swiperContainer}>
-            <Swiper
-              cards={cards}
-              renderCard={card => (
-                <View style={styles.cardContainer}>
-                  <Image source={{uri: card.image}} style={styles.cardImage} />
-                  <View style={styles.likeBadge}>
-                    <Text style={styles.likeText}>{card.likes} ❤️</Text>
-                  </View>
-                  <View style={styles.cardFooter}>
-                    <Text style={styles.name}>{card.name}</Text>
-                    <View style={styles.locationRow}>
-                      <Ionicons name="location-sharp" size={16} color="#fff" />
-                      <Text style={styles.location}>{card.location}</Text>
+            {!hydrated || (isLoading && cards.length === 0) ? (
+              <View style={{alignItems: 'center', marginTop: 16}}>
+                <Text style={{color: '#666'}}>Loading suggestions…</Text>
+              </View>
+            ) : isError ? (
+              <View style={{alignItems: 'center', marginTop: 16}}>
+                <Text style={{color: '#dc2626'}}>
+                  Failed to load. Pull to refresh.
+                </Text>
+              </View>
+            ) : cards.length === 0 ? (
+              <View style={{alignItems: 'center', marginTop: 16}}>
+                <Text style={{color: '#666'}}>No suggestions found.</Text>
+              </View>
+            ) : (
+              <Swiper
+                key={`swiper-${activeTab}-${stackCount}-${cleanedKey}`}
+                ref={swiperRef}
+                cards={cards}
+                renderCard={(card, idx) => {
+                  if (!card) {
+                    return (
+                      <View
+                        style={[
+                          styles.cardContainer,
+                          {alignItems: 'center', justifyContent: 'center'},
+                        ]}>
+                        <Text style={{color: '#666'}}>…</Text>
+                      </View>
+                    );
+                  }
+                  return (
+                    <View
+                      key={`card-${card.id}-${idx}`}
+                      style={styles.cardContainer}>
+                      <Image
+                        source={{uri: card.image}}
+                        style={styles.cardImage}
+                      />
+                      <View style={styles.cardFooter}>
+                        <Text style={styles.name}>{card.name}</Text>
+                        <View style={styles.locationRow}>
+                          <Ionicons
+                            name="location-sharp"
+                            size={16}
+                            color="#fff"
+                          />
+                          <Text style={styles.location}>
+                            {card.location || '—'}
+                          </Text>
+                        </View>
+                      </View>
                     </View>
-                  </View>
-                </View>
-              )}
-              backgroundColor="transparent"
-              cardVerticalMargin={20}
-              stackSize={5}
-              cardIndex={0}
-              showSecondCard
-              animateCardOpacity
-              infinite
-              onSwiped={cardIndex =>
-                console.log('Swiped card index:', cardIndex)
-              }
-              onSwipedAll={() => console.log('All cards swiped')}
-            />
+                  );
+                }}
+                backgroundColor="transparent"
+                cardVerticalMargin={20}
+                stackSize={stackCount}
+                showSecondCard={loop}
+                infinite={loop}
+                cardIndex={currentIndex}
+                animateCardOpacity
+                onSwiped={idx => {
+                  prefetchOnSwipe(idx);
+                  setCurrentIndex(idx + 1);
+                }}
+                onSwipedAll={() => {
+                  if (hasNextPage && !isFetchingNextPage) fetchNextPage();
+                }}
+              />
+            )}
           </View>
-        )}
-
-        {(activeTab === 'Discover' || activeTab === 'Premium') && (
-          <ScrollView contentContainerStyle={styles.gridContainer}>
-            {cards.map(user => (
-              <View key={user.id} style={styles.gridCard}>
+        ) : (
+          <ScrollView
+            contentContainerStyle={styles.gridContainer}
+            onScroll={onGridScroll}
+            scrollEventThrottle={16}>
+            {cards.map((user, i) => (
+              <View key={`${user.id}-${i}`} style={styles.gridCard}>
                 <Image source={{uri: user.image}} style={styles.gridImage} />
-                <View style={styles.gridLikeBadge}>
-                  <Text style={styles.likeText}>{user.likes} ❤️</Text>
-                </View>
                 <View style={styles.gridFooter}>
                   <Text style={styles.gridName}>{user.name}</Text>
                   <Text style={styles.gridLocation}>{user.location}</Text>
                 </View>
               </View>
             ))}
+            {isFetchingNextPage ? (
+              <View style={{alignItems: 'center', width: '100%', marginTop: 8}}>
+                <Text style={{color: '#666'}}>Loading more…</Text>
+              </View>
+            ) : null}
           </ScrollView>
         )}
       </View>
 
-      {/* Like / Dislike Buttons (Only for Flame) */}
       {activeTab === 'Flame' && (
         <View style={styles.actionButtons}>
-          <TouchableOpacity style={styles.crossButton}>
+          <TouchableOpacity style={styles.crossButton} onPress={handleDislike}>
             <Ionicons name="close" size={30} color="#fff" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.heartButton}>
+          <TouchableOpacity style={styles.heartButton} onPress={handleLike}>
             <Ionicons name="heart" size={30} color="#fff" />
           </TouchableOpacity>
         </View>
@@ -257,10 +345,7 @@ const HeartScreen = ({navigation}) => {
 export default HeartScreen;
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
+  container: {flex: 1, backgroundColor: '#fff'},
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -268,16 +353,8 @@ const styles = StyleSheet.create({
     marginTop: 10,
     justifyContent: 'space-between',
   },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-  },
-  heading: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#000',
-  },
+  avatar: {width: 40, height: 40, borderRadius: 20},
+  heading: {fontSize: 18, fontWeight: '700', color: '#000'},
   subHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -285,15 +362,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     marginTop: 10,
   },
-  tabRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  tabText: {
-    marginRight: 20,
-    fontSize: 16,
-    color: '#888',
-  },
+  tabRow: {flexDirection: 'row', alignItems: 'center'},
+  tabText: {marginRight: 20, fontSize: 16, color: '#888'},
   activeTab: {
     color: '#f1499d',
     fontWeight: 'bold',
@@ -301,57 +371,20 @@ const styles = StyleSheet.create({
     borderBottomColor: '#f1499d',
     paddingBottom: 2,
   },
-  scanBtn: {
-    padding: 10,
-    borderRadius: 12,
-  },
-  swiperContainer: {
-    height: height * 0.55,
-  },
+  scanBtn: {padding: 10, borderRadius: 12},
+  swiperContainer: {height: height * 0.55},
   cardContainer: {
-    height: height * 0.75,
+    height: height * 0.7,
     borderRadius: 20,
     overflow: 'hidden',
     backgroundColor: '#ddd',
     position: 'relative',
   },
-  cardImage: {
-    width: '100%',
-    height: '100%',
-    resizeMode: 'cover',
-  },
-  likeBadge: {
-    position: 'absolute',
-    top: 20,
-    right: 20,
-    backgroundColor: '#f1499d',
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 20,
-  },
-  likeText: {
-    color: '#fff',
-    fontWeight: 'bold',
-  },
-  cardFooter: {
-    position: 'absolute',
-    bottom: 20,
-    left: 20,
-  },
-  name: {
-    fontSize: 22,
-    color: '#fff',
-    fontWeight: 'bold',
-  },
-  locationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  location: {
-    color: '#fff',
-    marginLeft: 5,
-  },
+  cardImage: {width: '100%', height: '100%', resizeMode: 'cover'},
+  cardFooter: {position: 'absolute', bottom: 20, left: 20},
+  name: {fontSize: 22, color: '#fff', fontWeight: 'bold'},
+  locationRow: {flexDirection: 'row', alignItems: 'center', marginTop: 4},
+  location: {color: '#fff', marginLeft: 5},
   actionButtons: {
     position: 'absolute',
     bottom: 100,
@@ -378,17 +411,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  bottomTabs: {
-    position: 'absolute',
-    bottom: 20,
-    left: 40,
-    right: 40,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-
-  // 🔥 Grid styles
   gridContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -409,32 +431,8 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     elevation: 3,
   },
-  gridImage: {
-    width: '100%',
-    height: '100%',
-    resizeMode: 'cover',
-  },
-  gridLikeBadge: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    backgroundColor: '#f1499d',
-    paddingVertical: 2,
-    paddingHorizontal: 8,
-    borderRadius: 12,
-  },
-  gridFooter: {
-    position: 'absolute',
-    bottom: 10,
-    left: 10,
-  },
-  gridName: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 14,
-  },
-  gridLocation: {
-    color: '#fff',
-    fontSize: 12,
-  },
+  gridImage: {width: '100%', height: '100%', resizeMode: 'cover'},
+  gridFooter: {position: 'absolute', bottom: 10, left: 10},
+  gridName: {color: '#fff', fontWeight: 'bold', fontSize: 14},
+  gridLocation: {color: '#fff', fontSize: 12},
 });

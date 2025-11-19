@@ -1,4 +1,3 @@
-// src/api/auth.ts
 import {api} from './client';
 import {saveToken, deleteToken} from '../storage/secureToken';
 
@@ -31,30 +30,27 @@ export async function login(payload: LoginPayload): Promise<LoginResponse> {
     if (__DEV__) {
       console.log('login error:', error);
     }
-    throw error; // mutation.onError + error.message in UI
+    throw error;
   }
 }
 
 export async function logout(): Promise<void> {
   try {
     await deleteToken();
-    // optionally call backend logout endpoint here
   } catch (error) {
     if (__DEV__) {
       console.log('logout error:', error);
     }
-    // usually you don't rethrow on logout; token is gone locally anyway
   }
 }
 
 export interface RegisterFile {
-  uri: string; // file path from image picker / camera
-  name?: string; // optional, we'll fallback
-  type?: string; // e.g. 'image/jpeg'
+  uri: string;
+  name?: string;
+  type?: string;
 }
 
 export interface RegisterPayload {
-  // required
   name: string;
   phone: number | string;
   email: string;
@@ -65,9 +61,8 @@ export interface RegisterPayload {
   city: string;
   partner_age_start: number;
   partner_age_end: number;
-  pro_path: RegisterFile; // profile image
+  pro_path: RegisterFile;
 
-  // optional
   ethnicity?: string;
   education?: string;
   profession?: string;
@@ -96,8 +91,8 @@ export interface RegisterPayload {
 }
 
 export interface RegisterResponse {
-  status: string; // "success"
-  message: string; // "User created successfully"
+  status: string;
+  message: string;
 }
 
 export const registerUser = async (
@@ -107,7 +102,6 @@ export const registerUser = async (
   try {
     const formData = new FormData();
 
-    // Helper to append images in RN-safe format
     const appendFile = (key: string, file?: RegisterFile) => {
       if (!file || !file.uri) return;
       formData.append(key, {
@@ -117,7 +111,6 @@ export const registerUser = async (
       } as any);
     };
 
-    // Required text/number fields
     formData.append('name', payload.name);
     formData.append('phone', String(payload.phone));
     formData.append('email', payload.email);
@@ -129,10 +122,8 @@ export const registerUser = async (
     formData.append('partner_age_start', String(payload.partner_age_start));
     formData.append('partner_age_end', String(payload.partner_age_end));
 
-    // Required profile image
     appendFile('pro_path', payload.pro_path);
 
-    // Optional scalar fields: only send if defined
     const optionalScalarFields: (keyof RegisterPayload)[] = [
       'ethnicity',
       'education',
@@ -172,14 +163,13 @@ export const registerUser = async (
       }
     });
 
-    // Optional images
     appendFile('image_one', payload.image_one);
     appendFile('image_two', payload.image_two);
 
     const res = await api.post<RegisterResponse>('/users/create', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
-        ...(otp ? {otp} : {}), // attach verified OTP if you have it
+        ...(otp ? {otp} : {}),
       },
     });
 
