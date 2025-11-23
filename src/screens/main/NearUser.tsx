@@ -25,7 +25,8 @@ import {API_BASE_URL} from '../../config/env';
 
 const {width} = Dimensions.get('window');
 
-const tabs = ['Likes me', 'Liked', 'Passed', 'Pings'];
+// const tabs = ['Likes me', 'Liked', 'Passed', 'Pings']; //Commented For backup
+const tabs = ['Likes me', 'Liked'];
 
 // demo data for other tabs
 const demoUsers = [
@@ -69,7 +70,8 @@ const mapSent = (r: SentRequestItem) => ({
 
 const NearUser = ({navigation}: {navigation: any}) => {
   const [activeTab, setActiveTab] = useState<
-    'Likes me' | 'Liked' | 'Passed' | 'Pings'
+    // 'Likes me' | 'Liked' | 'Passed' | 'Pings' //Commented For backup
+    'Likes me' | 'Liked'
   >('Likes me');
   const queryClient = useQueryClient();
 
@@ -140,7 +142,7 @@ const NearUser = ({navigation}: {navigation: any}) => {
                 });
               } else {
                 // Passed / Pings → just navigate
-                navigation?.navigate('MatchScreen');
+                // navigation?.navigate('MatchScreen');
               }
             }}
             style={styles.checkButton}>
@@ -251,16 +253,16 @@ const styles = StyleSheet.create({
   },
   tabContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 16,
+    justifyContent: 'flex-start',
+    marginBottom: 8,
     flexWrap: 'wrap',
   },
   tab: {
     paddingVertical: 8,
-    paddingHorizontal: 8,
+    paddingHorizontal: 14,
     backgroundColor: '#eee',
     borderRadius: 20,
-    marginRight: 8,
+    marginRight: 10,
     marginBottom: 8,
     flexDirection: 'row',
     alignItems: 'center',

@@ -202,7 +202,7 @@ const HeartScreen = ({navigation}: {navigation: any}) => {
       {/* Top Header */}
       <View style={styles.topBar}>
         <Image source={{uri: myAvatarUri}} style={styles.avatar} />
-        <Text style={styles.heading}>{activeTab}</Text>
+        <Text style={styles.heading}>{}</Text>
         <TouchableOpacity
           onPress={() => navigation?.navigate('NearUser')}
           style={styles.scanBtn}>
@@ -215,7 +215,8 @@ const HeartScreen = ({navigation}: {navigation: any}) => {
 
       {/* Tabs + Filters */}
       <View style={styles.subHeader}>
-        <View style={styles.tabRow}>
+        <View></View>
+        {/* <View style={styles.tabRow}>
           {(['Flame', 'Discover', 'Premium'] as const).map(tab => (
             <TouchableOpacity key={tab} onPress={() => setActiveTab(tab)}>
               <Text
@@ -224,7 +225,7 @@ const HeartScreen = ({navigation}: {navigation: any}) => {
               </Text>
             </TouchableOpacity>
           ))}
-        </View>
+        </View> */}
         <TouchableOpacity onPress={openFilters}>
           <Feather name="sliders" size={22} color="#333" />
         </TouchableOpacity>

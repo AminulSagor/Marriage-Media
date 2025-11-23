@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "998482149650",
+    "project_id": "arooshi-personal",
+    "storage_bucket": "arooshi-personal.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:998482149650:android:49ed54b8866d7a93ffb3cb",
+        "android_client_info": {
+          "package_name": "com.aroosi"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCErTXxUDbx-mUQgkCW5l9b1bCPRc4XLNw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

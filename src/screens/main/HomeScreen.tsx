@@ -42,6 +42,14 @@ import PostCounts from '../../Components/PostCounts';
 import ReactorsBottomSheet from '../../Components/ReactorsBottomSheet';
 import CommentsBottomSheet from '../../Components/CommentsBottomSheet';
 
+import {fetchProfile} from '../../api/profile';
+import {
+  ensurePresenceDoc,
+  startPresenceTracking,
+  setPresenceStopper,
+  stopPresenceIfAny,
+} from '../../services/presence';
+
 interface HomeScreenProps {
   navigation: any;
 }
@@ -179,6 +187,27 @@ const HomeScreen: React.FC<HomeScreenProps> = ({navigation}) => {
 
   const queryClient = useQueryClient();
 
+  const {data: me} = useQuery({
+    queryKey: ['me-profile'],
+    queryFn: fetchProfile,
+  });
+
+  // ⬇️ Start presence tracking when Home loads after login.
+  // If called again (e.g., me changes), stop previous then start fresh.
+  React.useEffect(() => {
+    if (!me?.id) return;
+
+    (async () => {
+      // stop any prior tracker first
+      stopPresenceIfAny();
+      await ensurePresenceDoc(me.id);
+      const stop = await startPresenceTracking(me.id);
+      setPresenceStopper(stop); // make it globally stoppable (Settings logout)
+    })();
+    // ⚠️ Do NOT stop on unmount here; we want tracking to keep running
+    // and only stop explicitly on logout.
+  }, [me?.id]);
+
   // --- NEW: Friends (replaces stories) ---
   const {
     data: friends = [],
@@ -296,9 +325,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({navigation}) => {
           onPress={() => navigation?.goBack?.()}
         />
         <View style={styles.headerIcons}>
-          <TouchableOpacity onPress={() => setShowWarning(true)}>
+          {/* Commented for now */}
+          {/* <TouchableOpacity onPress={() => setShowWarning(true)}>
             <Icon name="notifications-outline" size={24} style={styles.icon} />
-          </TouchableOpacity>
+          </TouchableOpacity> */}
           <TouchableOpacity onPress={() => navigation?.navigate('ChatScreen')}>
             <Icon name="chatbubble-ellipses-outline" size={24} />
           </TouchableOpacity>
@@ -455,7 +485,7 @@ export default HomeScreen;
 
 // styles unchanged
 const styles = StyleSheet.create({
-  container: {flex: 1, backgroundColor: '#fff', paddingTop: 40},
+  container: {flex: 1, backgroundColor: '#fff', paddingTop: 15},
   header: {
     flexDirection: 'row',
     alignItems: 'center',

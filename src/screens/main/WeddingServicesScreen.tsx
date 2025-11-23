@@ -158,13 +158,14 @@ const WeddingServicesScreen: React.FC<Props> = ({route, navigation}) => {
             </Text>
             <Text style={styles.location}>📍 {userLocation || '—'}</Text>
           </View>
-          <TouchableOpacity>
+          {/* (Commented For now) */}
+          {/* <TouchableOpacity>
             <Ionicons name="notifications-outline" size={22} color="#000" />
-          </TouchableOpacity>
+          </TouchableOpacity> */}
         </View>
 
-        {/* Search */}
-        <View style={styles.searchBar}>
+        {/* Search (Commented For now) */}
+        {/* <View style={styles.searchBar}>
           <Ionicons name="search-outline" size={20} color="#999" />
           <TextInput
             placeholder="What are you looking for?"
@@ -174,12 +175,13 @@ const WeddingServicesScreen: React.FC<Props> = ({route, navigation}) => {
           <TouchableOpacity>
             <Ionicons name="options-outline" size={20} color="#E91E63" />
           </TouchableOpacity>
-        </View>
+        </View> */}
 
         {/* Section Title */}
-        <View style={styles.sectionHeader}>
+        {/* (Commented For now) */}
+        {/* <View style={styles.sectionHeader}>
           <View>
-            <Text style={styles.sectionTitle}>Wedding services Nearby</Text>
+            <Text style={styles.sectionTitle}>Business Details</Text>
             <Text style={styles.subText}>
               {business.one_liner || 'Where every bite tells a story!'}
             </Text>
@@ -187,7 +189,7 @@ const WeddingServicesScreen: React.FC<Props> = ({route, navigation}) => {
           <TouchableOpacity>
             <Text style={styles.linkText}>See all</Text>
           </TouchableOpacity>
-        </View>
+        </View> */}
 
         {/* Business card */}
         <View style={styles.card}>
@@ -205,6 +207,9 @@ const WeddingServicesScreen: React.FC<Props> = ({route, navigation}) => {
           <View style={{marginTop: 10}}>
             <Text style={styles.cardTitle}>
               {business.shop_name || 'Business'}
+            </Text>
+            <Text style={styles.subText}>
+              {business.one_liner || 'Where every bite tells a story!'}
             </Text>
             <Text style={styles.cardLocation}>📍 {locationLine || '—'}</Text>
           </View>
@@ -409,7 +414,7 @@ const styles = StyleSheet.create({
   },
   likeText: {color: '#fff', marginLeft: 4, fontSize: 12},
   cardTitle: {fontSize: 16, fontWeight: 'bold', color: '#000'},
-  cardLocation: {fontSize: 13, color: '#555'},
+  cardLocation: {fontSize: 13, color: '#555', marginTop: 6},
   ratingRow: {flexDirection: 'row', alignItems: 'center', marginTop: 6},
   stars: {fontSize: 14},
   rating: {fontSize: 13, marginLeft: 5, color: '#555'},

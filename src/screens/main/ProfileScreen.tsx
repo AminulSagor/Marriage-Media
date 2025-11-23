@@ -85,11 +85,11 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
           source={
             profile?.image_one || profile?.pro_path
               ? {
-                  uri: `${API_BASE_URL}/${
-                    profile.image_one || profile.pro_path
-                  }`,
+                  uri: `${API_BASE_URL}/${profile.pro_path}`,
                 }
-              : require('../../assets/images/pro.png')
+              : {
+                  uri: `https://placehold.co/80x80`,
+                }
           }
           style={[styles.profileImage, blurEnabled && {opacity: 0.4}]}
         />

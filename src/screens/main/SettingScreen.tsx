@@ -17,6 +17,8 @@ import {useQuery} from '@tanstack/react-query';
 import {logout} from '../../api/auth';
 import {fetchProfile, UserProfile} from '../../api/profile';
 
+import {stopPresenceIfAny} from '../../services/presence';
+
 type SettingsScreenProps = {
   navigation: any;
   route?: {params?: {profile?: UserProfile}};
@@ -51,6 +53,10 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation, route}) => {
 
   const handleLogout = async () => {
     setLogoutModal(false);
+
+    // stop presence tracking & mark offline
+    stopPresenceIfAny();
+
     await logout();
     const rootNav = navigation.getParent()?.getParent() ?? navigation;
     rootNav.reset({index: 0, routes: [{name: 'Auth'}]});
@@ -62,12 +68,15 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation, route}) => {
     label: string,
     value: string = '',
     danger = false,
+    tapable: boolean = true,
     onPress?: () => void,
   ) => (
     <TouchableOpacity
       style={styles.item}
-      onPress={onPress ?? (() => {})}
-      activeOpacity={0.7}>
+      onPress={tapable ? onPress ?? (() => {}) : undefined}
+      activeOpacity={0.7}
+      disabled={!tapable} // ✅ prevents touch highlight
+    >
       <View style={styles.itemLeft}>
         {icon}
         <View style={{marginLeft: 10, flexShrink: 1}}>
@@ -83,7 +92,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation, route}) => {
           )}
         </View>
       </View>
-      <Icon name="chevron-forward" size={20} color="#999" />
+
+      {tapable && <Icon name="chevron-forward" size={20} color="#999" />}
     </TouchableOpacity>
   );
 
@@ -110,6 +120,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation, route}) => {
               'Name',
               profile?.name || '—',
               false,
+              true,
               () =>
                 navigation.navigate('EditPersonalInfo', {
                   profile,
@@ -121,6 +132,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation, route}) => {
               'Date Of Birth',
               formatDate(profile?.dob),
               false,
+              true,
               () =>
                 navigation.navigate('EditPersonalInfo', {
                   profile,
@@ -132,6 +144,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation, route}) => {
               'Gender',
               profile?.gender || '—',
               false,
+              true,
               () =>
                 navigation.navigate('EditPersonalInfo', {
                   profile,
@@ -143,34 +156,29 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation, route}) => {
               'Email Address',
               (profile as any)?.email || '—',
               false,
-              () =>
-                navigation.navigate('EditProfileScreen', {
-                  field: 'email',
-                  value: (profile as any)?.email || '',
-                }),
+              false,
+              () => {},
             )}
             {renderItem(
               <Icon name="call-outline" size={20} />,
               'Phone Number',
               (profile as any)?.phone || '—',
               false,
-              () =>
-                navigation.navigate('EditProfileScreen', {
-                  field: 'phone',
-                  value: (profile as any)?.phone || '',
-                }),
+              false,
+              () => {},
             )}
             {renderItem(
               <Icon name="key-outline" size={20} />,
               'Change Password',
               'Change your password if you forgot it',
               false,
+              true,
               () => navigation.navigate('ChangePasswordScreen'),
             )}
           </View>
 
-          {/* App Settings */}
-          <Text style={styles.sectionTitle}>App Settings</Text>
+          {/* App Settings (COMMENTED FOR NOW)*/}
+          {/* <Text style={styles.sectionTitle}>App Settings</Text>
           <View style={styles.section}>
             <View style={styles.item}>
               <View style={styles.itemLeft}>
@@ -184,7 +192,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation, route}) => {
               </View>
               <Switch value={audioMute} onValueChange={setAudioMute} />
             </View>
-          </View>
+          </View> */}
 
           {/* Privacy & Safety */}
           <Text style={styles.sectionTitle}>Privacy & Safety</Text>
@@ -194,6 +202,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation, route}) => {
               'Block / Unblock Users',
               '',
               false,
+              true,
               () => navigation.navigate('BlockUnblockUsers'),
             )}
             {renderItem(
@@ -201,6 +210,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation, route}) => {
               'Profile I Visited',
               '',
               false,
+              true,
               () => navigation.navigate('ProfileVisited'),
             )}
             {renderItem(
@@ -208,14 +218,16 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation, route}) => {
               'Locations Setting',
               '',
               false,
+              true,
               () => navigation.navigate('LocationSetting'),
             )}
           </View>
 
           {/* Notifications */}
           <Text style={styles.sectionTitle}>Notifications</Text>
+          {/* Commented for now */}
           <View style={styles.section}>
-            <View style={styles.item}>
+            {/* <View style={styles.item}>
               <View style={styles.itemLeft}>
                 <MaterialIcon name="bell-outline" size={20} />
                 <Text style={styles.itemText}>
@@ -223,7 +235,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation, route}) => {
                 </Text>
               </View>
               <Switch value={matchNoti} onValueChange={setMatchNoti} />
-            </View>
+            </View> */}
             <View style={styles.item}>
               <View style={styles.itemLeft}>
                 <MaterialIcon name="chat-outline" size={20} />
@@ -233,17 +245,18 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation, route}) => {
               </View>
               <Switch value={chatNoti} onValueChange={setChatNoti} />
             </View>
-            <View style={styles.item}>
+            {/* Commented for now */}
+            {/* <View style={styles.item}>
               <View style={styles.itemLeft}>
                 <MaterialIcon name="email-outline" size={20} />
                 <Text style={styles.itemText}>Email & SMS Alerts</Text>
               </View>
               <Switch value={emailSms} onValueChange={setEmailSms} />
-            </View>
+            </View> */}
           </View>
 
-          {/* Subscription & Payments */}
-          <Text style={styles.sectionTitle}>Subscription & Payments</Text>
+          {/* Subscription & Payments (Commented For now)*/}
+          {/* <Text style={styles.sectionTitle}>Subscription & Payments</Text>
           <View style={styles.section}>
             {renderItem(
               <Icon name="card-outline" size={20} />,
@@ -263,10 +276,10 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation, route}) => {
               false,
               () => navigation.navigate('PaymentScreen'),
             )}
-          </View>
+          </View> */}
 
-          {/* Language & Region */}
-          <Text style={styles.sectionTitle}>Language & Region</Text>
+          {/* Language & Region (commented for now)*/}
+          {/* <Text style={styles.sectionTitle}>Language & Region</Text>
           <View style={styles.section}>
             {renderItem(
               <Icon name="language-outline" size={20} />,
@@ -276,7 +289,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation, route}) => {
               <Icon name="earth-outline" size={20} />,
               'Change Region Or Location',
             )}
-          </View>
+          </View> */}
 
           {/* Help & Support */}
           <Text style={styles.sectionTitle}>Help & Support</Text>
@@ -295,17 +308,19 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation, route}) => {
           {/* Safety Tips */}
           <Text style={styles.sectionTitle}>Safety Tips</Text>
           <View style={styles.section}>
-            {renderItem(
+            {/* Commented For now */}
+            {/* {renderItem(
               <Icon name="shield-checkmark-outline" size={20} />,
               'Respect Islamic Values',
               'Keep your intentions pure for Nikah (marriage)',
-            )}
+            )} */}
             {renderItem(
               <Icon name="eye-outline" size={20} />,
               'Protect Your Privacy',
               'Do not share personal details too quickly',
             )}
-            {renderItem(
+            {/* Commented For now */}
+            {/* {renderItem(
               <Icon name="chatbubble-ellipses-outline" size={20} />,
               'Safe Communication',
               'Use in-app chat instead of external apps initially',
@@ -324,7 +339,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation, route}) => {
               <Icon name="location-outline" size={20} />,
               'Meet Safely',
               'If meeting, choose a public and safe location',
-            )}
+            )} */}
           </View>
 
           {/* Legal & Policies */}
@@ -349,8 +364,9 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation, route}) => {
           <View style={styles.section}>
             {renderItem(
               <Icon name="warning-outline" size={20} color="red" />,
-              'Delete Or Deactivate Account',
+              'Delete Account',
               "Once you delete it, you can't get it back",
+              true,
               true,
               () => navigation.navigate('DeleteAccountScreen'),
             )}
@@ -359,6 +375,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation, route}) => {
               'Log Out',
               '',
               false,
+              true,
               () => setLogoutModal(true),
             )}
           </View>

@@ -27,7 +27,7 @@ export type FilterValues = {
 };
 
 export const DEFAULT_FILTERS: Required<FilterValues> = {
-  gender: 'Female',
+  gender: 'Any',
   ageMin: 18,
   ageMax: 99,
   distance: 50,

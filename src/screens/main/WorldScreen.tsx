@@ -12,9 +12,11 @@ import {
   Platform,
   PermissionsAndroid,
   Alert,
+  StatusBar,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import Geolocation from 'react-native-geolocation-service';
+import Geocoder from 'react-native-geocoder-reborn';
 import {useInfiniteQuery, useQuery} from '@tanstack/react-query';
 import {
   fetchBusinesses,
@@ -55,20 +57,14 @@ const WorldScreen = ({navigation}: {navigation: any}) => {
     return granted === PermissionsAndroid.RESULTS.GRANTED;
   };
 
-  // Reverse geocode → "City, Country"
   const reverseGeocode = async (lat: number, lon: number) => {
-    const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}`;
-    const res = await fetch(url, {
-      headers: {'User-Agent': 'AroosiApp/1.0 (contact: support@example.com)'},
-    });
-    if (!res.ok) throw new Error('Reverse geocoding failed');
-    const json = await res.json();
-    const a = json?.address || {};
-    const city =
-      a.city || a.town || a.village || a.municipality || a.county || '';
+    const res = await Geocoder.geocodePosition({lat, lng: lon});
+    const a = res?.[0] || {};
+
+    const city = a.locality || a.subAdminArea || a.adminArea || '';
     const country = a.country || '';
-    const label = [city, country].filter(Boolean).join(', ');
-    return label || country || city || '';
+
+    return [city, country].filter(Boolean).join(', ');
   };
 
   const handleToggleLocation = async () => {
@@ -95,6 +91,7 @@ const WorldScreen = ({navigation}: {navigation: any}) => {
           try {
             const {latitude, longitude} = pos.coords;
             const label = await reverseGeocode(latitude, longitude);
+            console.log(`LABEL: ${latitude} ${longitude}`);
             setCoords({lat: latitude, lon: longitude});
             setLocationLabel(label); // show beside title
             setUseDeviceLocation(true);
@@ -205,6 +202,10 @@ const WorldScreen = ({navigation}: {navigation: any}) => {
 
   return (
     <View style={styles.container}>
+      <StatusBar
+        barStyle="dark-content"
+        backgroundColor={Platform.OS === 'android' ? 'white' : undefined}
+      />
       {/* Header: current user */}
       <View style={styles.header}>
         {avatarUri ? (

@@ -31,6 +31,15 @@ export interface UserProfile {
   pro_path?: string | null;
   image_one?: string | null;
   image_two?: string | null;
+  prefered_partner_age_start?: string | number | null;
+  prefered_partner_age_end?: string | number | null;
+  prefered_partner_distance_range?: string | number | null;
+  prefered_partner_religion?: string | null;
+  prefered_partner_religion_section?: string | null;
+  prefered_partner_occupation?: string | null;
+  prefered_partner_education?: string | null;
+  prefered_partner_marital_status?: string | null;
+  prefered_partner_ethnicity?: string | null;
 }
 
 interface ProfileResponse {
