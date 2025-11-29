@@ -4,7 +4,7 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import {SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
 import {ImageBackground} from 'react-native';
 import {useMutation} from '@tanstack/react-query';
-import {sendSignupOtp, verifyOtp} from '../../api/otp';
+import {sendSignupOtp, sendResetOtp, verifyOtp} from '../../api/otp';
 import {useSignupFlow} from '../../context/SignupFlowContext';
 
 const CODE_LENGTH = 6;
@@ -12,14 +12,19 @@ const TIMER_SECONDS = 30;
 
 interface OtpScreenProps {
   navigation: any;
+  route: any;
 }
 
-const OtpScreen: React.FC<OtpScreenProps> = ({navigation}) => {
+const OtpScreen: React.FC<OtpScreenProps> = ({navigation, route}) => {
   const insets = useSafeAreaInsets();
   const {data, update} = useSignupFlow();
 
-  // email only from signup flow
-  const email = data?.email ?? '';
+  const flag = route?.params?.flag as string | undefined; // e.g. 'reset'
+  const paramEmail = route?.params?.email as string | undefined;
+  const isResetFlow = flag === 'reset';
+
+  // email from signup flow OR passed from RecoverScreen
+  const email = data?.email ?? paramEmail ?? '';
 
   const [code, setCode] = useState<string[]>(Array(CODE_LENGTH).fill(''));
   const [timer, setTimer] = useState<number>(TIMER_SECONDS);
@@ -47,7 +52,15 @@ const OtpScreen: React.FC<OtpScreenProps> = ({navigation}) => {
       verifyOtp({email, otp}),
     onSuccess: (_res, {email, otp}) => {
       update({email, otp}); // store verified email + otp
-      navigation.navigate('GenderScreen');
+
+      if (isResetFlow) {
+        navigation.navigate('ResetPasswordScreen', {
+          email,
+          otp,
+        });
+      } else {
+        navigation.navigate('GenderScreen');
+      }
     },
   });
 
@@ -57,7 +70,8 @@ const OtpScreen: React.FC<OtpScreenProps> = ({navigation}) => {
     isPending: isResending,
     error: resendError,
   } = useMutation({
-    mutationFn: (emailArg: string) => sendSignupOtp(emailArg),
+    mutationFn: (emailArg: string) =>
+      isResetFlow ? sendResetOtp(emailArg) : sendSignupOtp(emailArg),
     onSuccess: () => {
       setCode(Array(CODE_LENGTH).fill(''));
       setTimer(TIMER_SECONDS);

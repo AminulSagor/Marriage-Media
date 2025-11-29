@@ -19,7 +19,7 @@ export const api = axios.create({
 api.interceptors.request.use(
   async (config: InternalAxiosRequestConfig) => {
     const token = await getToken();
-
+    console.log(`TOKEN: ${token}`);
     if (token) {
       if (!config.headers) {
         (config as any).headers = {};

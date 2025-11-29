@@ -28,6 +28,24 @@ export const sendSignupOtp = async (
   }
 };
 
+export const sendResetOtp = async (email: string): Promise<SendOtpResponse> => {
+  try {
+    const res = await api.post<SendOtpResponse>('/users/send-otp', {
+      email,
+      otp_method: 'reset',
+    });
+    return res.data;
+  } catch (err: any) {
+    const message =
+      err?.response?.data?.message ||
+      err?.message ||
+      'Failed to send verification code';
+    const wrapped = new Error(message);
+    (wrapped as any).cause = err;
+    throw wrapped;
+  }
+};
+
 export const verifyOtp = async (payload: {email: string; otp: string}) => {
   const res = await api.post('/users/verify-otp', payload);
   return res.data;

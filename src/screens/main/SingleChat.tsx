@@ -14,9 +14,11 @@ import {
   Platform,
   ActivityIndicator,
   LayoutChangeEvent,
-  Keyboard, // ⬅️ NEW
-  KeyboardEvent, // ⬅️ NEW
+  Keyboard,
+  KeyboardEvent,
   StatusBar,
+  Alert,
+  ScrollView, // ✅ added
 } from 'react-native';
 import {useFocusEffect, useRoute} from '@react-navigation/native';
 import {SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
@@ -27,7 +29,18 @@ import {
   sendMessage,
   Message,
   markConversationRead,
+  uploadMessageImage, // ✅ new
 } from '../../services/chat';
+import {blockUser} from '../../api/friends';
+
+// 🔹 image picker
+import {
+  launchCamera,
+  launchImageLibrary,
+  Asset,
+} from 'react-native-image-picker';
+
+import ImageViewer from 'react-native-image-zoom-viewer';
 
 type RouteParams = {
   chatId: string;
@@ -38,6 +51,19 @@ type RouteParams = {
 };
 
 const PAGE_SIZE = 25;
+
+// reasons for reporting a user
+const USER_REPORT_REASONS = [
+  {id: 'spam', label: 'Spam or fake account'},
+  {id: 'harassment', label: 'Harassment or bullying'},
+  {id: 'hate', label: 'Hate speech or symbols'},
+  {id: 'scam', label: 'Scam or fraud'},
+  {id: 'inappropriate', label: 'Inappropriate or offensive messages'},
+  {id: 'other', label: 'Other'},
+] as const;
+
+// simple helper – treat any http/https value as an image URL
+const isImageUrl = (value: string) => /^https?:\/\//i.test(value);
 
 const SingleChat = ({navigation}: {navigation: any}) => {
   const {params} = useRoute<any>();
@@ -50,6 +76,7 @@ const SingleChat = ({navigation}: {navigation: any}) => {
   const [popupVisible, setPopupVisible] = useState(false);
   const [mute, setMute] = useState(false);
   const [block, setBlock] = useState(false);
+  const [blocking, setBlocking] = useState(false);
   const [unblur, setUnblur] = useState(false);
 
   const [loadingInitial, setLoadingInitial] = useState(true);
@@ -59,13 +86,27 @@ const SingleChat = ({navigation}: {navigation: any}) => {
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
 
+  // report user dialog state
+  const [reportVisible, setReportVisible] = useState(false);
+  const [reportReason, setReportReason] = useState<string | null>(null);
+  const [reportDetails, setReportDetails] = useState('');
+  const [sendingReport, setSendingReport] = useState(false);
+
+  // image preview state (before upload)
+  const [pendingImage, setPendingImage] = useState<Asset | null>(null);
+  const [imagePreviewVisible, setImagePreviewVisible] = useState(false);
+  const [sendingImage, setSendingImage] = useState(false);
+
+  // 🔹 full-screen image viewer
+  const [fullImageUrl, setFullImageUrl] = useState<string | null>(null);
+
   // --- Keyboard extra offset (adds a small cushion while visible) ---
   const [kbExtra, setKbExtra] = useState(0);
   useEffect(() => {
     const SHOW = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
     const HIDE = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
 
-    const onShow = (_e: KeyboardEvent) => setKbExtra(40); // small cushion
+    const onShow = (_e: KeyboardEvent) => setKbExtra(40);
     const onHide = () => setKbExtra(0);
 
     const s1 = Keyboard.addListener(SHOW, onShow);
@@ -76,8 +117,6 @@ const SingleChat = ({navigation}: {navigation: any}) => {
     };
   }, []);
 
-  // iOS needs a vertical offset equal to status bar + header.
-  // Android relies on adjustResize (see manifest step below), but we still keep a tiny kbExtra for parity.
   const keyboardOffset = useMemo(
     () => (Platform.OS === 'ios' ? insets.top + headerH + kbExtra : kbExtra),
     [insets.top, headerH, kbExtra],
@@ -146,6 +185,15 @@ const SingleChat = ({navigation}: {navigation: any}) => {
     if (h > 0) setInputH(h);
   };
 
+  // 🔹 back button: close full-screen image first, otherwise go back
+  const handleBackPress = () => {
+    if (fullImageUrl) {
+      setFullImageUrl(null);
+    } else {
+      navigation.goBack();
+    }
+  };
+
   const renderItem = ({item}: {item: Message}) => {
     const isMine = item.senderId === String(myId);
     const ts =
@@ -155,6 +203,8 @@ const SingleChat = ({navigation}: {navigation: any}) => {
     const time = ts
       ? ts.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})
       : '…';
+
+    const showAsImage = isImageUrl(item.text);
 
     return (
       <View style={[styles.msgRow, isMine ? styles.rowMine : styles.rowPeer]}>
@@ -169,13 +219,25 @@ const SingleChat = ({navigation}: {navigation: any}) => {
             styles.msgBubble,
             isMine ? styles.bubbleMine : styles.bubblePeer,
           ]}>
-          <Text
-            style={[
-              styles.msgText,
-              isMine ? styles.textMine : styles.textPeer,
-            ]}>
-            {item.text}
-          </Text>
+          {showAsImage ? (
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onPress={() => setFullImageUrl(item.text)}>
+              <Image
+                source={{uri: item.text}}
+                style={styles.msgImage}
+                resizeMode="cover"
+              />
+            </TouchableOpacity>
+          ) : (
+            <Text
+              style={[
+                styles.msgText,
+                isMine ? styles.textMine : styles.textPeer,
+              ]}>
+              {item.text}
+            </Text>
+          )}
           <Text
             style={[
               styles.msgTime,
@@ -188,6 +250,149 @@ const SingleChat = ({navigation}: {navigation: any}) => {
     );
   };
 
+  // handle block toggle -> call /users/block when turned ON
+  const handleToggleBlock = useCallback(
+    async (value: boolean) => {
+      setBlock(value);
+
+      if (value && !blocking) {
+        try {
+          setBlocking(true);
+          await blockUser(peerId);
+        } catch (err) {
+          console.log('Failed to block user', err);
+          setBlock(false);
+        } finally {
+          setBlocking(false);
+        }
+      }
+    },
+    [peerId, blocking],
+  );
+
+  // report dialog handlers
+  const openReportDialog = () => {
+    setPopupVisible(false);
+    setReportReason(null);
+    setReportDetails('');
+    setReportVisible(true);
+  };
+
+  const closeReportDialog = () => {
+    if (sendingReport) return;
+    setReportVisible(false);
+    setReportReason(null);
+    setReportDetails('');
+  };
+
+  const submitReport = () => {
+    if (!reportReason || sendingReport) return;
+
+    const reasonLabel =
+      USER_REPORT_REASONS.find(r => r.id === reportReason)?.label ??
+      reportReason;
+
+    const trimmedDetails = reportDetails.trim();
+    const combinedText = trimmedDetails
+      ? `${reasonLabel}: ${trimmedDetails}`
+      : reasonLabel;
+
+    // No backend endpoint provided yet, so just show a confirmation.
+    setSendingReport(true);
+    setTimeout(() => {
+      setSendingReport(false);
+      Alert.alert(
+        'Report submitted',
+        'Thanks for letting us know. We will review this conversation.',
+      );
+      closeReportDialog();
+      console.log('User report payload:', {
+        peerId,
+        report_text: combinedText,
+      });
+    }, 500);
+  };
+
+  // ---------- image picker handlers ----------
+
+  const handlePickedAsset = (asset?: Asset) => {
+    if (!asset || !asset.uri) return;
+    setPendingImage(asset);
+    setImagePreviewVisible(true);
+  };
+
+  const openCameraPicker = () => {
+    launchCamera(
+      {
+        mediaType: 'photo',
+        quality: 0.8,
+      },
+      response => {
+        if (response.didCancel) return;
+        if (response.errorCode) {
+          console.log('Camera error:', response.errorMessage);
+          Alert.alert('Camera error', 'Could not open camera.');
+          return;
+        }
+        const asset = response.assets?.[0];
+        handlePickedAsset(asset);
+      },
+    );
+  };
+
+  const openGalleryPicker = () => {
+    launchImageLibrary(
+      {
+        mediaType: 'photo',
+        quality: 0.8,
+      },
+      response => {
+        if (response.didCancel) return;
+        if (response.errorCode) {
+          console.log('Image picker error:', response.errorMessage);
+          Alert.alert('Image error', 'Could not select image.');
+          return;
+        }
+        const asset = response.assets?.[0];
+        handlePickedAsset(asset);
+      },
+    );
+  };
+
+  const handleCancelImage = () => {
+    if (sendingImage) return;
+    setImagePreviewVisible(false);
+    setPendingImage(null);
+  };
+
+  const handleSendImage = async () => {
+    if (!pendingImage?.uri || sendingImage) return;
+    try {
+      setSendingImage(true);
+
+      // ✅ upload image and get URL
+      const url = await uploadMessageImage({
+        uri: pendingImage.uri,
+        name: pendingImage.fileName ?? undefined,
+        type: pendingImage.type ?? undefined,
+      });
+
+      // ✅ send URL as plain text message
+      await sendMessage(myId, peerId, url);
+      markConversationRead(chatId, myId).catch(() => {});
+
+      setImagePreviewVisible(false);
+      setPendingImage(null);
+    } catch (err) {
+      console.log('Send image failed', err);
+      Alert.alert('Failed to send image', 'Please try again.');
+    } finally {
+      setSendingImage(false);
+    }
+  };
+
+  const closeFullImage = () => setFullImageUrl(null);
+
   return (
     <SafeAreaView style={styles.safeRoot} edges={['left', 'right']}>
       <StatusBar backgroundColor="#ffb6c9" barStyle="dark-content" />
@@ -198,7 +403,7 @@ const SingleChat = ({navigation}: {navigation: any}) => {
         keyboardVerticalOffset={keyboardOffset}>
         {/* Header strip */}
         <View style={[styles.header]} onLayout={onHeaderLayout}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
+          <TouchableOpacity onPress={handleBackPress}>
             <Icon name="chevron-back" size={24} color="#000" />
           </TouchableOpacity>
           <Image
@@ -209,14 +414,6 @@ const SingleChat = ({navigation}: {navigation: any}) => {
             {peerName ?? 'Chat'}
           </Text>
           <View style={styles.headerIcons}>
-            {/* Commented For Now */}
-            {/* <Icon name="call" size={22} color="#ff4f91" style={styles.icon} />
-            <Icon
-              name="videocam"
-              size={22}
-              color="#ff4f91"
-              style={styles.icon}
-            /> */}
             <TouchableOpacity onPress={() => setPopupVisible(true)}>
               <Icon name="information-circle" size={22} color="#ff4f91" />
             </TouchableOpacity>
@@ -244,7 +441,6 @@ const SingleChat = ({navigation}: {navigation: any}) => {
               }
               contentContainerStyle={{
                 paddingVertical: 8,
-                // keep last bubble clear of input bar + bottom inset
                 paddingBottom: inputH + insets.bottom + 8,
               }}
             />
@@ -258,9 +454,12 @@ const SingleChat = ({navigation}: {navigation: any}) => {
             {paddingBottom: Math.max(10, insets.bottom)},
           ]}
           onLayout={onInputLayout}>
-          <Icon name="camera" size={22} color="#ff4f91" />
-          <Icon name="images" size={22} color="#ff4f91" />
-          {/* <Icon name="mic" size={22} color="#ff4f91" /> */}
+          <TouchableOpacity onPress={openCameraPicker}>
+            <Icon name="camera" size={22} color="#ff4f91" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={openGalleryPicker}>
+            <Icon name="images" size={22} color="#ff4f91" />
+          </TouchableOpacity>
           <TextInput
             placeholder="Aa"
             style={styles.input}
@@ -283,7 +482,7 @@ const SingleChat = ({navigation}: {navigation: any}) => {
           </TouchableOpacity>
         </View>
 
-        {/* Popup */}
+        {/* Info popup */}
         <Modal
           visible={popupVisible}
           transparent
@@ -294,27 +493,170 @@ const SingleChat = ({navigation}: {navigation: any}) => {
             activeOpacity={1}
             onPressOut={() => setPopupVisible(false)}>
             <View style={styles.popup}>
-              {/* Commented For Now */}
-              {/* <View style={styles.row}>
-                <Text style={styles.text}>Mute audio / video calls</Text>
-                <Switch value={mute} onValueChange={setMute} />
-              </View> */}
               <View style={styles.row}>
                 <Text style={styles.text}>Block this person</Text>
-                <Switch value={block} onValueChange={setBlock} />
+                <Switch
+                  value={block}
+                  disabled={blocking}
+                  onValueChange={handleToggleBlock}
+                />
               </View>
-              <TouchableOpacity style={styles.row}>
+              <TouchableOpacity style={styles.row} onPress={openReportDialog}>
                 <Text style={[styles.text, {color: 'red', marginLeft: 6}]}>
                   Report this person
                 </Text>
                 <Icon name="warning-outline" size={18} color="red" />
               </TouchableOpacity>
-              <View style={styles.row}>
-                <Text style={styles.text}>Unblur my photo</Text>
-                <Switch value={unblur} onValueChange={setUnblur} />
-              </View>
             </View>
           </TouchableOpacity>
+        </Modal>
+
+        {/* Report user dialog */}
+        <Modal
+          visible={reportVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={closeReportDialog}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.reportBox}>
+              <View style={styles.reportHeaderRow}>
+                <Icon name="flag" size={22} color="#f04b60" />
+                <Text style={styles.reportTitle}>Report this user</Text>
+              </View>
+
+              <Text style={styles.reportMessage}>
+                If this person is behaving inappropriately, you can report them.
+                We will review recent messages and may restrict their account if
+                they violate our community guidelines.
+              </Text>
+
+              <Text style={styles.reportSectionTitle}>Choose a reason</Text>
+              {USER_REPORT_REASONS.map(r => (
+                <TouchableOpacity
+                  key={r.id}
+                  style={styles.reasonRow}
+                  onPress={() => setReportReason(r.id)}>
+                  <Icon
+                    name={
+                      reportReason === r.id
+                        ? 'radio-button-on'
+                        : 'radio-button-off'
+                    }
+                    size={20}
+                    color={reportReason === r.id ? '#f04b60' : '#999'}
+                  />
+                  <Text style={styles.reasonText}>{r.label}</Text>
+                </TouchableOpacity>
+              ))}
+
+              <Text style={styles.reportSectionTitle}>
+                Add details (optional)
+              </Text>
+              <TextInput
+                style={styles.detailsInput}
+                placeholder="Describe what happened..."
+                placeholderTextColor="#999"
+                multiline
+                value={reportDetails}
+                onChangeText={setReportDetails}
+              />
+
+              <View style={styles.reportButtonsRow}>
+                <TouchableOpacity
+                  style={[styles.reportButton, styles.reportCancelButton]}
+                  onPress={closeReportDialog}
+                  disabled={sendingReport}>
+                  <Text style={[styles.reportButtonText, {color: '#f04b60'}]}>
+                    Cancel
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.reportButton,
+                    {
+                      backgroundColor:
+                        reportReason && !sendingReport ? '#f04b60' : '#f7b6c5',
+                    },
+                  ]}
+                  disabled={!reportReason || sendingReport}
+                  onPress={submitReport}>
+                  <Text style={[styles.reportButtonText, {color: '#fff'}]}>
+                    {sendingReport ? 'Sending...' : 'Send Report'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Image preview dialog (before upload) */}
+        <Modal
+          visible={imagePreviewVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={handleCancelImage}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.imagePreviewBox}>
+              {pendingImage?.uri ? (
+                <Image
+                  source={{uri: pendingImage.uri}}
+                  style={styles.previewImage}
+                  resizeMode="cover"
+                />
+              ) : null}
+
+              <View style={styles.previewButtonsRow}>
+                <TouchableOpacity
+                  style={[styles.previewButton, styles.previewCancelButton]}
+                  onPress={handleCancelImage}
+                  disabled={sendingImage}>
+                  <Text style={[styles.previewButtonText, {color: '#f04b60'}]}>
+                    Cancel
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.previewButton,
+                    {
+                      backgroundColor: sendingImage ? '#f7b6c5' : '#f04b60',
+                    },
+                  ]}
+                  onPress={handleSendImage}
+                  disabled={sendingImage}>
+                  <Text style={[styles.previewButtonText, {color: '#fff'}]}>
+                    {sendingImage ? 'Sending...' : 'Send'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* 🔹 Full-screen image viewer with pinch-zoom (iOS + Android) */}
+        <Modal
+          visible={!!fullImageUrl}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={closeFullImage}>
+          <View style={styles.fullscreenContainer}>
+            {/* close button overlay */}
+            <TouchableOpacity
+              style={styles.fullscreenBackBtn}
+              onPress={closeFullImage}>
+              <Icon name="close" size={30} color="#fff" />
+            </TouchableOpacity>
+
+            {fullImageUrl ? (
+              <ImageViewer
+                imageUrls={[{url: fullImageUrl}]}
+                enableSwipeDown
+                onSwipeDown={closeFullImage}
+                onCancel={closeFullImage}
+                backgroundColor="#000"
+                saveToLocalByLongPress={false} // optional: disable save dialog
+              />
+            ) : null}
+          </View>
         </Modal>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -358,6 +700,14 @@ const styles = StyleSheet.create({
   msgTime: {fontSize: 10, marginTop: 4, alignSelf: 'flex-end'},
   timeMine: {color: 'rgba(255,255,255,0.85)'},
   timePeer: {color: '#666'},
+  msgImage: {
+    width: 220,
+    height: 260,
+    borderRadius: 16,
+    backgroundColor: '#eee',
+    marginBottom: 4,
+    overflow: 'hidden',
+  },
 
   inputArea: {
     flexDirection: 'row',
@@ -409,5 +759,127 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: '#ffb6c9',
+  },
+
+  // report dialog styles
+  reportBox: {
+    width: '88%',
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    padding: 18,
+  },
+  reportHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  reportTitle: {
+    marginLeft: 8,
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#111',
+  },
+  reportMessage: {
+    fontSize: 13,
+    color: '#333',
+    backgroundColor: '#f7f0f3',
+    padding: 10,
+    borderRadius: 12,
+    lineHeight: 18,
+  },
+  reportSectionTitle: {
+    marginTop: 14,
+    marginBottom: 4,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111',
+  },
+  reasonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 4,
+  },
+  reasonText: {
+    marginLeft: 10,
+    fontSize: 14,
+    color: '#333',
+  },
+  detailsInput: {
+    marginTop: 8,
+    minHeight: 60,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 13,
+    textAlignVertical: 'top',
+    backgroundColor: '#fafafa',
+  },
+  reportButtonsRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 16,
+  },
+  reportButton: {
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 20,
+    marginLeft: 10,
+  },
+  reportCancelButton: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#f04b60',
+  },
+  reportButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+
+  // image preview styles
+  imagePreviewBox: {
+    width: '88%',
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    padding: 18,
+  },
+  previewImage: {
+    width: '100%',
+    height: 260,
+    borderRadius: 18,
+    backgroundColor: '#eee',
+  },
+  previewButtonsRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 18,
+  },
+  previewButton: {
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 20,
+    marginLeft: 10,
+  },
+  previewCancelButton: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#f04b60',
+  },
+  previewButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+
+  fullscreenContainer: {
+    flex: 1,
+    backgroundColor: '#000',
+  },
+  fullscreenBackBtn: {
+    position: 'absolute',
+    top: 40,
+    left: 20,
+    zIndex: 10,
+    padding: 8,
   },
 });

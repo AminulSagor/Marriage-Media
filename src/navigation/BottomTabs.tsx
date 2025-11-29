@@ -39,6 +39,7 @@ const getTabBarVisibility = (route: Partial<Route<string>>) => {
     'FilterScreen',
     'SingleChat',
     'OtherProfileScreen',
+    'ChangePasswordScreen',
   ];
 
   return hideTabBarRoutes.includes(routeName) ? 'none' : 'flex';

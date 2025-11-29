@@ -38,8 +38,6 @@ export interface UserProfile {
   prefered_partner_religion_section?: string | null;
   prefered_partner_occupation?: string | null;
   prefered_partner_education?: string | null;
-  prefered_partner_marital_status?: string | null;
-  prefered_partner_ethnicity?: string | null;
 }
 
 interface ProfileResponse {
@@ -114,5 +112,32 @@ export async function updateProfile(
   });
 
   const {data} = await api.put<UpdateProfileResponse>('/users/update', body);
+  return data;
+}
+
+/** ---------- CHANGE PASSWORD ---------- **/
+
+export interface ChangePasswordPayload {
+  email: string;
+  password: string; // current password
+  new_password: string;
+}
+
+export interface ChangePasswordResponse {
+  status: string; // "success"
+  message: string; // "Password changed successfully"
+}
+
+/**
+ * Change user password.
+ * Endpoint: /change-password
+ */
+export async function changePassword(
+  payload: ChangePasswordPayload,
+): Promise<ChangePasswordResponse> {
+  const {data} = await api.put<ChangePasswordResponse>(
+    '/change-password',
+    payload,
+  );
   return data;
 }

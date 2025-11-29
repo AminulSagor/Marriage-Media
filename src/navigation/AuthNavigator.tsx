@@ -37,6 +37,7 @@ import BottomTabs from './BottomTabs';
 import PaymentScreen from '../screens/auth/PaymentScreen';
 
 import {SignupFlowProvider} from '../context/SignupFlowContext';
+import ResetPasswordScreen from '../screens/auth/ResetPasswordScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -75,6 +76,10 @@ export default function AuthNavigator() {
         <Stack.Screen name="BusVerifyEmail" component={BusVerifyEmail} />
         <Stack.Screen name="BusMobileScreen" component={BusMobileScreen} />
         <Stack.Screen name="BusOtpScreen2" component={BusOtpScreen2} />
+        <Stack.Screen
+          name="ResetPasswordScreen"
+          component={ResetPasswordScreen}
+        />
         <Stack.Screen
           name="SubscriptionScreen"
           component={SubscriptionScreen}

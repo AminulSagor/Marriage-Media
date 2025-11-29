@@ -19,6 +19,7 @@ import {
   getSendRequestList,
   SentRequestItem,
   acceptFriendRequest,
+  cancelFriendOrUnfriend,
 } from '../../api/friends';
 import {fetchProfile} from '../../api/profile';
 import {API_BASE_URL} from '../../config/env';
@@ -28,40 +29,55 @@ const {width} = Dimensions.get('window');
 // const tabs = ['Likes me', 'Liked', 'Passed', 'Pings']; //Commented For backup
 const tabs = ['Likes me', 'Liked'];
 
-// demo data for other tabs
-const demoUsers = [
+type NearUserItem = {
+  id: string; // request id
+  userId?: number; // actual other user id (receiver/sender)
+  name: string;
+  image: string;
+};
+
+// demo data for other tabs (not used now)
+const demoUsers: NearUserItem[] = [
   {
     id: '1',
+    userId: 1,
     name: 'Jak Devin',
     image: 'https://randomuser.me/api/portraits/men/10.jpg',
   },
   {
     id: '2',
+    userId: 2,
     name: 'Neha',
     image: 'https://randomuser.me/api/portraits/women/20.jpg',
   },
   {
     id: '3',
+    userId: 3,
     name: 'Faruqi',
     image: 'https://randomuser.me/api/portraits/men/30.jpg',
   },
   {
     id: '4',
+    userId: 4,
     name: 'Ahmed',
     image: 'https://randomuser.me/api/portraits/men/40.jpg',
   },
 ];
 
-const mapIncoming = (r: FriendRequestItem) => ({
+const mapIncoming = (r: FriendRequestItem): NearUserItem => ({
   id: String(r.request_id),
+  // other user = sender; fall back to request_id if backend doesn't send it
+  userId: r.user_id ?? r.sender_id ?? r.request_id,
   name: r.name,
   image: r.pro_path
     ? `${API_BASE_URL}/${r.pro_path}`
     : 'https://randomuser.me/api/portraits/men/40.jpg',
 });
 
-const mapSent = (r: SentRequestItem) => ({
+const mapSent = (r: SentRequestItem): NearUserItem => ({
   id: String(r.request_id),
+  // other user = receiver; fall back to request_id if backend doesn't send it
+  userId: r.user_id ?? r.receiver_id ?? r.request_id,
   name: r.name,
   image: r.pro_path
     ? `${API_BASE_URL}/${r.pro_path}`
@@ -108,24 +124,30 @@ const NearUser = ({navigation}: {navigation: any}) => {
     },
   });
 
+  // Cancel request / Unfriend
+  const cancelMut = useMutation({
+    mutationFn: (receiverId: number) => cancelFriendOrUnfriend(receiverId),
+    onSuccess: () => {
+      // affects both incoming and sent lists
+      queryClient.invalidateQueries({queryKey: ['friend-requests']});
+      queryClient.invalidateQueries({queryKey: ['sent-requests']});
+    },
+  });
+
   const likeMeUsers = useMemo(
     () => (incomingData?.data ?? []).map(mapIncoming),
     [incomingData],
   );
   const likedUsers = useMemo(() => (sentData ?? []).map(mapSent), [sentData]);
 
-  const listData =
+  const listData: NearUserItem[] =
     activeTab === 'Likes me'
       ? likeMeUsers
       : activeTab === 'Liked'
       ? likedUsers
       : demoUsers;
 
-  const renderUser = ({
-    item,
-  }: {
-    item: {id: string; name: string; image: string};
-  }) => (
+  const renderUser = ({item}: {item: NearUserItem}) => (
     <View style={styles.userCard}>
       <Image source={{uri: item.image}} style={styles.avatar} />
       <Text style={styles.name}>{item.name}</Text>
@@ -150,7 +172,14 @@ const NearUser = ({navigation}: {navigation: any}) => {
           </TouchableOpacity>
         )}
 
-        <TouchableOpacity style={styles.crossButton}>
+        <TouchableOpacity
+          style={styles.crossButton}
+          disabled={cancelMut.isPending}
+          onPress={() => {
+            // prefer actual userId, fall back to request id
+            const receiverId = item.userId ?? Number(item.id);
+            cancelMut.mutate(receiverId);
+          }}>
           <Icon name="close" size={22} color="white" />
         </TouchableOpacity>
       </View>

@@ -117,6 +117,10 @@ export interface FriendRequestItem {
   request_id: number;
   name: string;
   pro_path?: string | null; // relative path to avatar
+
+  // optional IDs if backend returns them (useful for cancel/unfriend)
+  user_id?: number;
+  sender_id?: number;
 }
 
 export interface GetFriendRequestsResponse {
@@ -146,6 +150,10 @@ export interface SentRequestItem {
   request_id: number;
   name: string;
   pro_path?: string | null; // relative path to avatar
+
+  // optional IDs if backend returns them (useful for cancel/unfriend)
+  user_id?: number;
+  receiver_id?: number;
 }
 
 export interface SentRequestsResponse {
@@ -252,4 +260,61 @@ export async function fetchFriendProfile(
   );
   // API returns { status, data: [ { ...profile } ] }
   return res.data.data?.[0];
+}
+
+/* =========================
+   Cancel Request / Unfriend
+   ========================= */
+
+export interface CancelFriendOrUnfriendBody {
+  receiver_id: number;
+}
+
+export interface CancelFriendOrUnfriendResponse {
+  status: string; // "success"
+  message: string; // "Unfriended"
+}
+
+/** DELETE /users/unfriend */
+export async function cancelFriendOrUnfriend(
+  receiverId: number,
+): Promise<CancelFriendOrUnfriendResponse> {
+  const payload: CancelFriendOrUnfriendBody = {receiver_id: receiverId};
+
+  console.log(`Calling unfriend: ${receiverId}`);
+
+  // axios DELETE with body: pass it via `data`
+  const res = await api.delete<CancelFriendOrUnfriendResponse>(
+    '/users/unfriend',
+    {
+      data: payload,
+    },
+  );
+
+  console.log(res.data);
+
+  return res.data;
+}
+
+/* =========================
+   Block User
+   ========================= */
+
+export interface BlockUserBody {
+  blocked_id: number;
+}
+
+export interface BlockUserResponse {
+  status: string; // "success"
+  message: string; // "blocked"
+}
+
+/** POST /users/block */
+export async function blockUser(userId: number): Promise<BlockUserResponse> {
+  const payload: BlockUserBody = {blocked_id: userId};
+
+  console.log(`BLOCKING USER: ${userId}`);
+
+  const res = await api.post<BlockUserResponse>('/users/block', payload);
+  return res.data;
 }

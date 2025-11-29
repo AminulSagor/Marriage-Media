@@ -173,7 +173,10 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation, route}) => {
               'Change your password if you forgot it',
               false,
               true,
-              () => navigation.navigate('ChangePasswordScreen'),
+              () =>
+                navigation.navigate('ChangePasswordScreen', {
+                  email: (profile as any)?.email,
+                }),
             )}
           </View>
 
@@ -205,22 +208,22 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation, route}) => {
               true,
               () => navigation.navigate('BlockUnblockUsers'),
             )}
-            {renderItem(
+            {/* {renderItem(
               <Icon name="person-circle-outline" size={20} />,
               'Profile I Visited',
               '',
               false,
               true,
               () => navigation.navigate('ProfileVisited'),
-            )}
-            {renderItem(
+            )} */}
+            {/* {renderItem(
               <Icon name="location-outline" size={20} />,
               'Locations Setting',
               '',
               false,
               true,
               () => navigation.navigate('LocationSetting'),
-            )}
+            )} */}
           </View>
 
           {/* Notifications */}

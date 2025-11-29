@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import {useQuery} from '@tanstack/react-query';
+import {useQuery, useMutation, useQueryClient} from '@tanstack/react-query';
 import {
   NavigationProp,
   ParamListBase,
@@ -19,7 +19,7 @@ import {
   useRoute,
 } from '@react-navigation/native';
 
-import {fetchFriendProfile} from '../../api/friends';
+import {fetchFriendProfile, cancelFriendOrUnfriend} from '../../api/friends';
 import {API_BASE_URL} from '../../config/env';
 
 // If you have a concrete stack, replace ParamListBase with your RootStackParamList
@@ -30,6 +30,8 @@ const OtherProfileScreen: React.FC = () => {
   const route = useRoute<OtherProfileRoute>();
   const userId: number | undefined = (route.params as any)?.userId;
 
+  const queryClient = useQueryClient();
+
   const {
     data: profile,
     isLoading,
@@ -39,6 +41,18 @@ const OtherProfileScreen: React.FC = () => {
     queryKey: ['friend-profile', userId],
     queryFn: () => fetchFriendProfile(Number(userId)),
     enabled: !!userId,
+  });
+
+  // same API used in NearUser.tsx close button
+  const unfriendMut = useMutation({
+    mutationFn: (receiverId: number) => cancelFriendOrUnfriend(receiverId),
+    onSuccess: () => {
+      // refresh lists that depend on friend requests / sent requests
+      queryClient.invalidateQueries({queryKey: ['friend-requests']});
+      queryClient.invalidateQueries({queryKey: ['sent-requests']});
+      // optional: go back after success
+      // navigation.goBack();
+    },
   });
 
   const valueOrMissing = (v: any) =>
@@ -119,12 +133,13 @@ const OtherProfileScreen: React.FC = () => {
             style={styles.backButton}>
             <Ionicons name="chevron-back" size={22} color="#000" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.notifyButton}>
+          {/* (Commented For Backup)*/}
+          {/* <TouchableOpacity style={styles.notifyButton}>
             <Ionicons name="notifications-outline" size={22} color="#000" />
-          </TouchableOpacity>
+          </TouchableOpacity> */}
 
-          {/* Overlay Text Bubbles */}
-          <View style={styles.overlayContainer}>
+          {/* Overlay Text Bubbles  (Commented For Backup)*/}
+          {/* <View style={styles.overlayContainer}>
             <Text style={styles.overlayText}>
               Looking for halal connection. You seem nice. 🌸
             </Text>
@@ -137,11 +152,12 @@ const OtherProfileScreen: React.FC = () => {
             <Text style={styles.overlayText}>
               Good vibes from your profile. Salaam!
             </Text>
-          </View>
+          </View> */}
         </View>
 
         {/* Action Icons (no outer boxes) */}
         <View style={styles.actionRow}>
+          {/* left icon */}
           <TouchableOpacity style={styles.actionIcon}>
             <Image
               source={require('../../assets/images/one.png')}
@@ -150,7 +166,11 @@ const OtherProfileScreen: React.FC = () => {
             />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.actionIcon}>
+          {/* middle icon = HEART → calls /users/unfriend */}
+          <TouchableOpacity
+            style={styles.actionIcon}
+            disabled={unfriendMut.isPending}
+            onPress={() => unfriendMut.mutate(Number(userId))}>
             <Image
               source={require('../../assets/images/onee.png')}
               style={styles.actionImg}
@@ -158,6 +178,7 @@ const OtherProfileScreen: React.FC = () => {
             />
           </TouchableOpacity>
 
+          {/* right icon */}
           <TouchableOpacity style={styles.actionIcon}>
             <Image
               source={require('../../assets/images/oneee.png')}

@@ -2,6 +2,9 @@
 import firestore, {
   FirebaseFirestoreTypes as FT,
 } from '@react-native-firebase/firestore';
+import {api} from '../api/client'; // ✅ use same axios instance/interceptor
+import {getToken} from '../storage/secureToken';
+import axios from 'axios';
 
 export type Conversation = {
   members: string[]; // ["1","4"]
@@ -137,4 +140,56 @@ export const fetchOlder = async (
   }));
   const last = docs.length ? docs[docs.length - 1] : null;
   return {items, last};
+};
+
+/** ---------- UPLOAD CHAT IMAGE ---------- **/
+
+type UploadMsgImgResponse = {
+  status: string;
+  message: string;
+  img_path: string;
+};
+
+/**
+ * Upload a chat image and return its URL.
+ * Endpoint: /upload_img.php
+ * Body: multipart/form-data with "img_path"
+ */
+export const uploadMessageImage = async (file: {
+  uri: string;
+  name?: string;
+  type?: string;
+}): Promise<string> => {
+  const token = await getToken();
+  if (!token) {
+    throw new Error('No auth token found');
+  }
+
+  const form = new FormData();
+  console.log(`${file.type} | ${file.name} | ${file.uri}`);
+
+  form.append('img_path', {
+    uri: file.uri,
+    name: file.name ?? `chat_${Date.now()}.jpg`,
+    type: file.type ?? 'image/jpeg',
+  } as any);
+
+  const res = await axios.post<UploadMsgImgResponse>(
+    'https://aroosiapp.com/php/upload_img.php',
+    form,
+    {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+
+  const data = res.data;
+
+  if (!data || data.status !== 'success' || !data.img_path) {
+    throw new Error(data?.message || 'Image upload failed');
+  }
+  console.log(`THE IMAGEPATH : ${data.img_path}`);
+  return data.img_path;
 };

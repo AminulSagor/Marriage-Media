@@ -15,6 +15,7 @@ import PaymentScreen from '../screens/auth/PaymentScreen';
 import EditAppearanceScreen from '../screens/main/EditAppearanceScreen';
 import EditReligionScreen from '../screens/main/EditReligionScreen';
 import EditPersonalInfo from '../screens/main/EditPersonalInfo';
+import ChangePasswordScreen from '../screens/main/ChangePasswordScreen';
 
 const Stack = createStackNavigator();
 
@@ -84,6 +85,11 @@ const ProfileTab = () => {
           options={{headerShown: false}}
           name="EditPersonalInfo"
           component={EditPersonalInfo}
+        />
+        <Stack.Screen
+          options={{headerShown: false}}
+          name="ChangePasswordScreen"
+          component={ChangePasswordScreen}
         />
       </Stack.Navigator>
     </SafeAreaView>

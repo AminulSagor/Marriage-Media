@@ -1,26 +1,53 @@
 // RecoverScreen.tsx
 
-import React from 'react';
+import React, {useState} from 'react';
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   ImageBackground,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
+import {SafeAreaView} from 'react-native-safe-area-context';
+import {sendResetOtp} from '../../api/otp';
 
-const RecoverScreen = () => {
+interface RecoverScreenProps {
+  navigation: any;
+}
+
+const RecoverScreen: React.FC<RecoverScreenProps> = ({navigation}) => {
+  const [identifier, setIdentifier] = useState('');
+
+  const handleRecover = async () => {
+    const email = identifier.trim();
+    if (!email) {
+      // you can add a toast / error state later
+      return;
+    }
+    try {
+      await sendResetOtp(email);
+      navigation.navigate('OtpScreen', {
+        flag: 'reset',
+        email,
+      });
+    } catch (err) {
+      console.log('Failed to send reset OTP', err);
+      // optional: show error UI
+    }
+  };
+
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <ImageBackground
         source={require('../../assets/images/intro.png')}
         style={styles.backgroundImage}
         resizeMode="cover">
         <View style={{padding: 20}}>
-          <TouchableOpacity style={styles.backButton}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}>
             <Icon name="chevron-back" size={24} color="#E94057" />
           </TouchableOpacity>
 
@@ -36,10 +63,13 @@ const RecoverScreen = () => {
               placeholder="email or phone number"
               placeholderTextColor="#999"
               style={styles.input}
+              value={identifier}
+              onChangeText={setIdentifier}
             />
           </View>
         </View>
-        <TouchableOpacity style={styles.recoverButton}>
+
+        <TouchableOpacity style={styles.recoverButton} onPress={handleRecover}>
           <Text style={styles.recoverText}>Recover</Text>
         </TouchableOpacity>
 
@@ -103,7 +133,7 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     fontSize: 14,
-    color: 'white',
+    color: '#000', // ✅ black while typing
   },
   recoverButton: {
     backgroundColor: '#f15b84',

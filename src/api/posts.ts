@@ -190,3 +190,26 @@ export async function addComment(
   });
   return data;
 }
+
+/** ---------- REPORT POST ---------- **/
+
+export interface ReportPostPayload {
+  post_id: number;
+  report_text: string;
+}
+
+export interface ReportPostResponse {
+  status: string; // "success"
+  message: string; // "Post reported successfully"
+}
+
+/** POST /posts/report */
+export async function reportPost(
+  payload: ReportPostPayload,
+): Promise<ReportPostResponse> {
+  const {data} = await api.post<ReportPostResponse>('/posts/report', payload);
+  console.log(
+    `Report submitted : ${data.message} and ${payload.post_id} msg: ${payload.report_text}`,
+  );
+  return data;
+}

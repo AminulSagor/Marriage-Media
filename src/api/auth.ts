@@ -88,6 +88,8 @@ export interface RegisterPayload {
   partner_education?: string;
   image_one?: RegisterFile;
   image_two?: RegisterFile;
+  prefered_partner_marital_status?: string;
+  prefered_partner_ethnicity?: string;
 }
 
 export interface RegisterResponse {
@@ -177,6 +179,44 @@ export const registerUser = async (
   } catch (err: any) {
     const message =
       err?.response?.data?.message || err?.message || 'Registration failed';
+    const wrapped = new Error(message);
+    (wrapped as any).cause = err;
+    throw wrapped;
+  }
+};
+
+export interface ResetPasswordResponse {
+  status: string; // "success"
+  message: string; // "Password reset successful"
+}
+
+/**
+ * PUT /users/reset-password
+ * body: { email, password }
+ * header: otp
+ */
+export const resetPassword = async (
+  email: string,
+  password: string,
+  otp: string,
+): Promise<ResetPasswordResponse> => {
+  try {
+    const res = await api.put<ResetPasswordResponse>(
+      '/users/reset-password',
+      {
+        email,
+        password,
+      },
+      {
+        headers: {
+          otp,
+        },
+      },
+    );
+    return res.data;
+  } catch (err: any) {
+    const message =
+      err?.response?.data?.message || err?.message || 'Password reset failed';
     const wrapped = new Error(message);
     (wrapped as any).cause = err;
     throw wrapped;

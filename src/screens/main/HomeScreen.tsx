@@ -11,6 +11,7 @@ import {
   Alert,
   Animated,
   Easing,
+  TextInput,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import Feather from 'react-native-vector-icons/Feather';
@@ -28,6 +29,7 @@ import {
   createPost,
   PostImageFile,
   reactToPost,
+  reportPost, // 🔹 NEW
 } from '../../api/posts';
 import {API_BASE_URL} from '../../config/env';
 
@@ -50,11 +52,24 @@ import {
   stopPresenceIfAny,
 } from '../../services/presence';
 
+// 🔹 zoomable viewer (same lib as SingleChat)
+import ImageViewer from 'react-native-image-zoom-viewer';
+
 interface HomeScreenProps {
   navigation: any;
 }
 
 const PAGE_SIZE = 10;
+
+// reasons for report dialog
+const REPORT_REASONS = [
+  {id: 'spam', label: 'Spam or misleading'},
+  {id: 'hate', label: 'Hate/harassment'},
+  {id: 'nudity', label: 'Nudity/sexual content'},
+  {id: 'illegal', label: 'Illegal or dangerous'},
+  {id: 'violence', label: 'Violence or gore'},
+  {id: 'other', label: 'Other'},
+] as const;
 
 /** Small card component so each post can manage its own heart animation */
 const PostCard: React.FC<{
@@ -62,7 +77,16 @@ const PostCard: React.FC<{
   onOpenReacts: (postId: number) => void;
   onOpenComments: (postId: number) => void;
   onDoubleTapReact: (postId: number) => void;
-}> = ({item, onOpenReacts, onOpenComments, onDoubleTapReact}) => {
+  onOpenReport: (post: FeedPost) => void;
+  onOpenImage: (url: string) => void; // 🔹 added
+}> = ({
+  item,
+  onOpenReacts,
+  onOpenComments,
+  onDoubleTapReact,
+  onOpenReport,
+  onOpenImage,
+}) => {
   const avatarUri = item.pro_path
     ? `${API_BASE_URL}/${item.pro_path}`
     : undefined;
@@ -93,13 +117,24 @@ const PostCard: React.FC<{
     ]).start();
   };
 
-  const singleTap = Gesture.Tap();
+  // 🔹 single tap → open image (if exists)
+  const singleTap = Gesture.Tap()
+    .maxDelay(250)
+    .onEnd((_event, success) => {
+      if (success && postUri) {
+        onOpenImage(postUri);
+      }
+    });
+
+  // 🔹 double tap → like + heart, NO fullscreen
   const doubleTap = Gesture.Tap()
     .numberOfTaps(2)
     .maxDelay(250)
-    .onEnd(() => {
-      showHeart();
-      onDoubleTapReact(item.id);
+    .onEnd((_event, success) => {
+      if (success) {
+        showHeart();
+        onDoubleTapReact(item.id);
+      }
     });
 
   const tapGesture = Gesture.Exclusive(doubleTap, singleTap);
@@ -122,21 +157,21 @@ const PostCard: React.FC<{
           )}
         </View>
 
-        <Icon
-          name="ellipsis-vertical"
-          size={20}
-          color="#000"
-          style={{marginLeft: 'auto'}}
-        />
+        <TouchableOpacity
+          style={{marginLeft: 'auto', padding: 4}}
+          onPress={() => onOpenReport(item)}>
+          <Icon name="ellipsis-vertical" size={20} color="#000" />
+        </TouchableOpacity>
       </View>
 
+      {/* Wrap image + caption in the double-tap area so text also reacts */}
       <GestureDetector gesture={tapGesture}>
         <View>
+          {/* If no image, show nothing – just caption below */}
           {postUri ? (
+            // ❌ removed TouchableOpacity here so double tap doesn’t trigger onPress
             <Image source={{uri: postUri}} style={styles.postImage} />
-          ) : (
-            <View style={styles.postImagePlaceholder} />
-          )}
+          ) : null}
 
           {/* Heart overlay */}
           <Animated.View
@@ -157,12 +192,12 @@ const PostCard: React.FC<{
             ]}>
             <Icon name="heart" size={96} color="#ff2d55" />
           </Animated.View>
+
+          {item.caption ? (
+            <Text style={styles.postText}>{item.caption}</Text>
+          ) : null}
         </View>
       </GestureDetector>
-
-      {item.caption ? (
-        <Text style={styles.postText}>{item.caption}</Text>
-      ) : null}
 
       <PostCounts
         postId={item.id}
@@ -185,6 +220,14 @@ const HomeScreen: React.FC<HomeScreenProps> = ({navigation}) => {
     null,
   );
 
+  // report dialog state
+  const [reportPostData, setReportPostData] = useState<FeedPost | null>(null);
+  const [reportReason, setReportReason] = useState<string | null>(null);
+  const [reportDetails, setReportDetails] = useState('');
+
+  // 🔹 full-screen image viewer state
+  const [fullImageUrl, setFullImageUrl] = useState<string | null>(null);
+
   const queryClient = useQueryClient();
 
   const {data: me} = useQuery({
@@ -192,23 +235,19 @@ const HomeScreen: React.FC<HomeScreenProps> = ({navigation}) => {
     queryFn: fetchProfile,
   });
 
-  // ⬇️ Start presence tracking when Home loads after login.
-  // If called again (e.g., me changes), stop previous then start fresh.
+  // presence tracking
   React.useEffect(() => {
     if (!me?.id) return;
 
     (async () => {
-      // stop any prior tracker first
       stopPresenceIfAny();
       await ensurePresenceDoc(me.id);
       const stop = await startPresenceTracking(me.id);
-      setPresenceStopper(stop); // make it globally stoppable (Settings logout)
+      setPresenceStopper(stop);
     })();
-    // ⚠️ Do NOT stop on unmount here; we want tracking to keep running
-    // and only stop explicitly on logout.
   }, [me?.id]);
 
-  // --- NEW: Friends (replaces stories) ---
+  // --- Friends strip ---
   const {
     data: friends = [],
     isLoading: loadingFriends,
@@ -275,6 +314,22 @@ const HomeScreen: React.FC<HomeScreenProps> = ({navigation}) => {
     },
   });
 
+  // 🔹 Report mutation
+  const {mutate: doReportPost, isPending: isReporting} = useMutation({
+    mutationFn: reportPost,
+    onSuccess: () => {
+      Alert.alert('Report submitted', 'Thanks for letting us know.');
+      handleCloseReport();
+    },
+    onError: (err: any) => {
+      const msg =
+        err?.response?.data?.message ||
+        err?.message ||
+        'Failed to submit report.';
+      Alert.alert('Report failed', msg);
+    },
+  });
+
   const handleSubmitPost = (caption: string, image?: PostImageFile | null) => {
     if (!caption.trim() && !image) {
       Alert.alert('Please add a caption or select an image.');
@@ -295,7 +350,39 @@ const HomeScreen: React.FC<HomeScreenProps> = ({navigation}) => {
     reactMutation.mutate(postId);
   };
 
-  // --- NEW: friend card (story replacement) ---
+  // report handlers
+  const handleOpenReport = (post: FeedPost) => {
+    setReportPostData(post);
+    setReportReason(null);
+    setReportDetails('');
+  };
+
+  const handleCloseReport = () => {
+    setReportPostData(null);
+    setReportReason(null);
+    setReportDetails('');
+  };
+
+  const handleSubmitReport = () => {
+    if (!reportPostData || !reportReason) {
+      return;
+    }
+
+    const reasonLabel =
+      REPORT_REASONS.find(r => r.id === reportReason)?.label ?? reportReason;
+
+    const trimmedDetails = reportDetails.trim();
+    const report_text = trimmedDetails
+      ? `${reasonLabel}: ${trimmedDetails}` // reason: details
+      : reasonLabel;
+
+    doReportPost({
+      post_id: reportPostData.id,
+      report_text,
+    });
+  };
+
+  // --- friend card (story replacement) ---
   const renderFriend = ({item}: {item: Friend}) => {
     const uri = item.pro_path ? `${API_BASE_URL}/${item.pro_path}` : undefined;
     return (
@@ -398,6 +485,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({navigation}) => {
     </View>
   );
 
+  const closeFullImage = () => setFullImageUrl(null);
+
   return (
     <View style={styles.container}>
       <FlatList
@@ -409,6 +498,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({navigation}) => {
             onOpenReacts={handleOpenReactsSheet}
             onOpenComments={handleOpenCommentsSheet}
             onDoubleTapReact={handleDoubleTapReact}
+            onOpenReport={handleOpenReport}
+            onOpenImage={setFullImageUrl} // 🔹 hook into viewer
           />
         )}
         ListHeaderComponent={renderListHeader}
@@ -440,6 +531,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({navigation}) => {
         isPosting={isPosting}
       />
 
+      {/* Existing warning modal */}
       <Modal
         visible={showWarning}
         animationType="fade"
@@ -456,6 +548,86 @@ const HomeScreen: React.FC<HomeScreenProps> = ({navigation}) => {
               style={styles.closeBtn}>
               <Text style={{color: '#fff'}}>OK</Text>
             </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Report dialog modal */}
+      <Modal
+        visible={!!reportPostData}
+        transparent
+        animationType="fade"
+        onRequestClose={handleCloseReport}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.reportBox}>
+            <View style={styles.reportHeaderRow}>
+              <Icon name="flag" size={22} color="#f04b60" />
+              <Text style={styles.reportTitle}>Report Inappropriate</Text>
+            </View>
+
+            <Text style={styles.reportMessage}>
+              Is this post inappropriate? We will review this report within 24
+              hours and, if deemed inappropriate, the post will be removed
+              within that timeframe. We will also take action against its
+              author. There is zero tolerance for objectionable content or
+              abuse.
+            </Text>
+
+            <Text style={styles.reportSectionTitle}>Choose a reason</Text>
+            {REPORT_REASONS.map(r => (
+              <TouchableOpacity
+                key={r.id}
+                style={styles.reasonRow}
+                onPress={() => setReportReason(r.id)}>
+                <Icon
+                  name={
+                    reportReason === r.id
+                      ? 'radio-button-on'
+                      : 'radio-button-off'
+                  }
+                  size={20}
+                  color={reportReason === r.id ? '#f04b60' : '#999'}
+                />
+                <Text style={styles.reasonText}>{r.label}</Text>
+              </TouchableOpacity>
+            ))}
+
+            <Text style={styles.reportSectionTitle}>
+              Add details (optional)
+            </Text>
+            <TextInput
+              style={styles.detailsInput}
+              placeholder="Describe the issue..."
+              placeholderTextColor="#999"
+              multiline
+              value={reportDetails}
+              onChangeText={setReportDetails}
+            />
+
+            <View style={styles.reportButtonsRow}>
+              <TouchableOpacity
+                style={[styles.reportButton, styles.reportCancelButton]}
+                onPress={handleCloseReport}
+                disabled={isReporting}>
+                <Text style={[styles.reportButtonText, {color: '#f04b60'}]}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.reportButton,
+                  {
+                    backgroundColor:
+                      reportReason && !isReporting ? '#f04b60' : '#f7b6c5',
+                  },
+                ]}
+                disabled={!reportReason || isReporting}
+                onPress={handleSubmitReport}>
+                <Text style={[styles.reportButtonText, {color: '#fff'}]}>
+                  {isReporting ? 'Sending...' : 'Send Report'}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -477,13 +649,37 @@ const HomeScreen: React.FC<HomeScreenProps> = ({navigation}) => {
           setCommentSheetPostId(null);
         }}
       />
+
+      {/* 🔹 Full-screen zoomable viewer, same lib as SingleChat */}
+      <Modal
+        visible={!!fullImageUrl}
+        transparent
+        animationType="fade"
+        onRequestClose={closeFullImage}>
+        <View style={styles.fullscreenOverlay}>
+          {fullImageUrl ? (
+            <ImageViewer
+              imageUrls={[{url: fullImageUrl}]}
+              enableSwipeDown
+              onSwipeDown={closeFullImage}
+              onCancel={closeFullImage}
+              backgroundColor="#000"
+              saveToLocalByLongPress={false}
+            />
+          ) : null}
+          <TouchableOpacity
+            style={styles.fullscreenCloseBtn}
+            onPress={closeFullImage}>
+            <Icon name="close" size={30} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      </Modal>
     </View>
   );
 };
 
 export default HomeScreen;
 
-// styles unchanged
 const styles = StyleSheet.create({
   container: {flex: 1, backgroundColor: '#fff', paddingTop: 15},
   header: {
@@ -516,13 +712,6 @@ const styles = StyleSheet.create({
   userName: {fontWeight: 'bold', fontSize: 14},
   time: {fontSize: 12, color: '#666'},
   postImage: {width: '100%', height: 180, borderRadius: 10, marginTop: 8},
-  postImagePlaceholder: {
-    width: '100%',
-    height: 180,
-    backgroundColor: '#ddd',
-    borderRadius: 10,
-    marginTop: 8,
-  },
   postText: {fontSize: 13, color: '#333', marginTop: 8},
   fab: {
     position: 'absolute',
@@ -578,5 +767,103 @@ const styles = StyleSheet.create({
     right: 0,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+
+  // report dialog styles
+  reportBox: {
+    width: '88%',
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    padding: 18,
+  },
+  reportHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  reportTitle: {
+    marginLeft: 8,
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#111',
+  },
+  reportMessage: {
+    fontSize: 13,
+    color: '#333',
+    backgroundColor: '#f7f0f3',
+    padding: 10,
+    borderRadius: 12,
+    lineHeight: 18,
+  },
+  reportItemLabel: {
+    marginTop: 10,
+    fontSize: 13,
+    color: '#555',
+  },
+  reportItemName: {
+    fontWeight: '600',
+    color: '#111',
+  },
+  reportSectionTitle: {
+    marginTop: 14,
+    marginBottom: 4,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111',
+  },
+  reasonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 4,
+  },
+  reasonText: {
+    marginLeft: 10,
+    fontSize: 14,
+    color: '#333',
+  },
+  detailsInput: {
+    marginTop: 8,
+    minHeight: 60,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 13,
+    textAlignVertical: 'top',
+    backgroundColor: '#fafafa',
+  },
+  reportButtonsRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 16,
+  },
+  reportButton: {
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 20,
+    marginLeft: 10,
+  },
+  reportCancelButton: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#f04b60',
+  },
+  reportButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+
+  // 🔹 full-screen viewer overlay styles
+  fullscreenOverlay: {
+    flex: 1,
+    backgroundColor: '#000',
+  },
+  fullscreenCloseBtn: {
+    position: 'absolute',
+    top: 40,
+    right: 20,
+    zIndex: 10,
+    padding: 8,
   },
 });
