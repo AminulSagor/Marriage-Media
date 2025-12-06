@@ -511,7 +511,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({navigation}) => {
           }
         }}
         refreshing={isLoading}
-        onRefresh={() => refetch()}
+        onRefresh={() => {
+          refetch();
+          refetchFriends();
+        }}
         showsVerticalScrollIndicator={false}
       />
 
@@ -681,7 +684,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({navigation}) => {
 export default HomeScreen;
 
 const styles = StyleSheet.create({
-  container: {flex: 1, backgroundColor: '#fff', paddingTop: 15},
+  container: {flex: 1, backgroundColor: '#FFEFF5', paddingTop: 15},
   header: {
     flexDirection: 'row',
     alignItems: 'center',

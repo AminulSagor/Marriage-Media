@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   Switch,
   ActivityIndicator,
+  StatusBar,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import {useQuery} from '@tanstack/react-query';
@@ -43,8 +44,8 @@ const calcAge = (dob?: string | null): number | null => {
 };
 
 const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
-  const [blurEnabled, setBlurEnabled] = useState(false);
-  const [isPublic, setIsPublic] = useState(true);
+  // const [blurEnabled, setBlurEnabled] = useState(false);
+  // const [isPublic, setIsPublic] = useState(true);
 
   const {
     data: profile,
@@ -74,47 +75,53 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
     : '';
 
   return (
-    <ScrollView
-      showsVerticalScrollIndicator={false}
-      style={styles.container}
-      contentInsetAdjustmentBehavior="always">
-      {/* Header with profile image */}
-      <View style={styles.header}>
-        {/* Profile photo: use API image if available, fallback to placeholder */}
-        <Image
-          source={
-            profile?.image_one || profile?.pro_path
-              ? {
-                  uri: `${API_BASE_URL}/${profile.pro_path}`,
-                }
-              : {
-                  uri: `https://placehold.co/80x80`,
-                }
-          }
-          style={[styles.profileImage, blurEnabled && {opacity: 0.4}]}
-        />
+    <>
+      <StatusBar
+        barStyle="dark-content"
+        backgroundColor="#ffb6c9" // Android only
+      />
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        style={styles.container}
+        contentInsetAdjustmentBehavior="always">
+        {/* Header with profile image */}
+        <View style={styles.header}>
+          {/* Profile photo: use API image if available, fallback to placeholder */}
+          <Image
+            source={
+              profile?.image_one || profile?.pro_path
+                ? {
+                    uri: `${API_BASE_URL}/${profile.pro_path}`,
+                  }
+                : {
+                    uri: `https://placehold.co/80x80`,
+                  }
+            }
+            // style={[styles.profileImage, blurEnabled && {opacity: 0.4}]} <- backup
+            style={[styles.profileImage]}
+          />
 
-        {/* <TouchableOpacity
+          {/* <TouchableOpacity
           style={styles.backIcon}
           onPress={() => navigation?.goBack()}>
           <Icon name="arrow-back" size={24} color="#000" />
         </TouchableOpacity> */}
 
-        <TouchableOpacity
-          onPress={() => {
-            if (profile) {
-              navigation?.navigate('SettingScreen', {profile});
-            } else {
-              navigation?.navigate('SettingScreen'); // fallback – Settings will fetch
-            }
-          }}
-          style={styles.settingsIcon}>
-          <Icon name="settings-outline" size={24} color="#000" />
-        </TouchableOpacity>
-      </View>
+          <TouchableOpacity
+            onPress={() => {
+              if (profile) {
+                navigation?.navigate('SettingScreen', {profile});
+              } else {
+                navigation?.navigate('SettingScreen'); // fallback – Settings will fetch
+              }
+            }}
+            style={[styles.settingsIcon, styles.settingsIconBox]}>
+            <Icon name="settings-outline" size={24} color="#000" />
+          </TouchableOpacity>
+        </View>
 
-      {/* Blur + Public/Private */}
-      <View style={styles.toggleRow}>
+        {/* Blur + Public/Private */}
+        {/* <View style={styles.toggleRow}>
         <Text style={styles.toggleText}>Blur my Photo</Text>
         <Switch
           value={blurEnabled}
@@ -122,9 +129,9 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
           trackColor={{false: '#ccc', true: '#ff4081'}}
           thumbColor="#fff"
         />
-      </View>
+      </View> */}
 
-      <View style={styles.pubPrivRow}>
+        {/* <View style={styles.pubPrivRow}>
         <TouchableOpacity onPress={() => setIsPublic(true)}>
           <Text style={[styles.pubPrivText, isPublic && styles.pubPrivActive]}>
             Public
@@ -135,45 +142,45 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
             Private
           </Text>
         </TouchableOpacity>
-      </View>
+      </View> */}
 
-      {/* Loading / Error states */}
-      {isProfileLoading && (
-        <View style={styles.center}>
-          <ActivityIndicator />
-          <Text style={styles.loadingText}>Loading profile...</Text>
-        </View>
-      )}
+        {/* Loading / Error states */}
+        {isProfileLoading && (
+          <View style={styles.center}>
+            <ActivityIndicator />
+            <Text style={styles.loadingText}>Loading profile...</Text>
+          </View>
+        )}
 
-      {isProfileError && !isProfileLoading && (
-        <View style={styles.center}>
-          <Text style={styles.errorText}>
-            Failed to load profile. Check your connection and try again later.
-          </Text>
-        </View>
-      )}
-
-      {/* Only render details when we have profile */}
-      {profile && !isProfileLoading && !isProfileError && (
-        <View>
-          {/* User Info */}
-          <View style={styles.userInfo}>
-            <Text style={styles.name}>{nameWithAge}</Text>
-            {!!location && (
-              <View style={styles.locLine}>
-                <Icon name="location-sharp" size={14} color="#333" />
-                <Text style={styles.location}>{location}</Text>
-              </View>
-            )}
-            <Text style={styles.bio}>
-              {`${profile?.profession || 'person'} from ${
-                profile?.country || 'somewhere'
-              }`}
+        {isProfileError && !isProfileLoading && (
+          <View style={styles.center}>
+            <Text style={styles.errorText}>
+              Failed to load profile. Check your connection and try again later.
             </Text>
           </View>
+        )}
 
-          {/* About Me */}
-          {/* <View style={styles.section}>
+        {/* Only render details when we have profile */}
+        {profile && !isProfileLoading && !isProfileError && (
+          <View>
+            {/* User Info */}
+            <View style={styles.userInfo}>
+              <Text style={styles.name}>{nameWithAge}</Text>
+              {!!location && (
+                <View style={styles.locLine}>
+                  <Icon name="location-sharp" size={14} color="#333" />
+                  <Text style={styles.location}>{location}</Text>
+                </View>
+              )}
+              <Text style={styles.bio}>
+                {`${profile?.profession || 'person'} from ${
+                  profile?.country || 'somewhere'
+                }`}
+              </Text>
+            </View>
+
+            {/* About Me */}
+            {/* <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>About Me</Text>
               <Text style={styles.editTag}>Edit</Text>
@@ -192,125 +199,131 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
             </View>
           </View> */}
 
-          {/* Appearance */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Appearance</Text>
-              <TouchableOpacity
-                onPress={() =>
-                  navigation.navigate('EditAppearance', {profile})
-                }>
-                <Text style={styles.editTag}>Edit</Text>
-              </TouchableOpacity>
+            {/* Appearance */}
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Appearance</Text>
+                <TouchableOpacity
+                  onPress={() =>
+                    navigation.navigate('EditAppearance', {profile})
+                  }>
+                  <Text style={styles.editTag}>Edit</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.tagRow}>
+                {profile.height && (
+                  <View style={styles.tag}>
+                    <Text style={styles.tagText}>
+                      Height: {profile.height} cm
+                    </Text>
+                  </View>
+                )}
+                {profile.weight && (
+                  <View style={styles.tag}>
+                    <Text style={styles.tagText}>
+                      Weight: {profile.weight} kg
+                    </Text>
+                  </View>
+                )}
+                {profile.body_type && (
+                  <View style={styles.tag}>
+                    <Text style={styles.tagText}>
+                      Body: {profile.body_type}
+                    </Text>
+                  </View>
+                )}
+              </View>
+              <View style={styles.tagRow}>
+                {profile.hair_color && (
+                  <View style={styles.tag}>
+                    <Text style={styles.tagText}>
+                      Hair: {profile.hair_color}
+                    </Text>
+                  </View>
+                )}
+                {profile.eye_color && (
+                  <View style={styles.tag}>
+                    <Text style={styles.tagText}>Eye: {profile.eye_color}</Text>
+                  </View>
+                )}
+                {profile.skin_color && (
+                  <View style={styles.tag}>
+                    <Text style={styles.tagText}>
+                      Skin: {profile.skin_color}
+                    </Text>
+                  </View>
+                )}
+              </View>
             </View>
-            <View style={styles.tagRow}>
-              {profile.height && (
-                <View style={styles.tag}>
-                  <Text style={styles.tagText}>
-                    Height: {profile.height} cm
-                  </Text>
-                </View>
-              )}
-              {profile.weight && (
-                <View style={styles.tag}>
-                  <Text style={styles.tagText}>
-                    Weight: {profile.weight} kg
-                  </Text>
-                </View>
-              )}
-              {profile.body_type && (
-                <View style={styles.tag}>
-                  <Text style={styles.tagText}>Body: {profile.body_type}</Text>
-                </View>
-              )}
-            </View>
-            <View style={styles.tagRow}>
-              {profile.hair_color && (
-                <View style={styles.tag}>
-                  <Text style={styles.tagText}>Hair: {profile.hair_color}</Text>
-                </View>
-              )}
-              {profile.eye_color && (
-                <View style={styles.tag}>
-                  <Text style={styles.tagText}>Eye: {profile.eye_color}</Text>
-                </View>
-              )}
-              {profile.skin_color && (
-                <View style={styles.tag}>
-                  <Text style={styles.tagText}>Skin: {profile.skin_color}</Text>
-                </View>
-              )}
-            </View>
-          </View>
 
-          {/* Religion */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Religion details</Text>
-              <TouchableOpacity
-                onPress={() =>
-                  navigation.navigate('EditReligionDetails', {profile})
-                }>
-                <Text style={styles.editTag}>Edit</Text>
-              </TouchableOpacity>
+            {/* Religion */}
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Religion details</Text>
+                <TouchableOpacity
+                  onPress={() =>
+                    navigation.navigate('EditReligionDetails', {profile})
+                  }>
+                  <Text style={styles.editTag}>Edit</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.tagRow}>
+                {profile.religion && (
+                  <View style={styles.tag}>
+                    <Text style={styles.tagText}>{profile.religion}</Text>
+                  </View>
+                )}
+                {profile.dress_code && (
+                  <View style={styles.tag}>
+                    <Text style={styles.tagText}>{profile.dress_code}</Text>
+                  </View>
+                )}
+              </View>
+              <View style={styles.tagRow}>
+                {profile.prayer_frequency && (
+                  <View style={styles.tag}>
+                    <Text style={styles.tagText}>
+                      Prayer: {String(profile.prayer_frequency)}
+                    </Text>
+                  </View>
+                )}
+              </View>
             </View>
-            <View style={styles.tagRow}>
-              {profile.religion && (
-                <View style={styles.tag}>
-                  <Text style={styles.tagText}>{profile.religion}</Text>
-                </View>
-              )}
-              {profile.dress_code && (
-                <View style={styles.tag}>
-                  <Text style={styles.tagText}>{profile.dress_code}</Text>
-                </View>
-              )}
-            </View>
-            <View style={styles.tagRow}>
-              {profile.prayer_frequency && (
-                <View style={styles.tag}>
-                  <Text style={styles.tagText}>
-                    Prayer: {String(profile.prayer_frequency)}
-                  </Text>
-                </View>
-              )}
-            </View>
-          </View>
 
-          {/* Personal Info */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Personal Info</Text>
-              <TouchableOpacity
-                onPress={() =>
-                  navigation.navigate('EditPersonalInfo', {profile})
-                }>
-                <Text style={styles.editTag}>Edit</Text>
-              </TouchableOpacity>
+            {/* Personal Info */}
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Personal Info</Text>
+                <TouchableOpacity
+                  onPress={() =>
+                    navigation.navigate('EditPersonalInfo', {profile})
+                  }>
+                  <Text style={styles.editTag}>Edit</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.tagRow}>
+                {profile.marital_status && (
+                  <View style={styles.tag}>
+                    <Text style={styles.tagText}>{profile.marital_status}</Text>
+                  </View>
+                )}
+                {profile.education && (
+                  <View style={styles.tag}>
+                    <Text style={styles.tagText}>{profile.education}</Text>
+                  </View>
+                )}
+              </View>
+              <View style={styles.tagRow}>
+                {profile.profession && (
+                  <View style={styles.tag}>
+                    <Text style={styles.tagText}>{profile.profession}</Text>
+                  </View>
+                )}
+              </View>
             </View>
-            <View style={styles.tagRow}>
-              {profile.marital_status && (
-                <View style={styles.tag}>
-                  <Text style={styles.tagText}>{profile.marital_status}</Text>
-                </View>
-              )}
-              {profile.education && (
-                <View style={styles.tag}>
-                  <Text style={styles.tagText}>{profile.education}</Text>
-                </View>
-              )}
-            </View>
-            <View style={styles.tagRow}>
-              {profile.profession && (
-                <View style={styles.tag}>
-                  <Text style={styles.tagText}>{profile.profession}</Text>
-                </View>
-              )}
-            </View>
-          </View>
 
-          {/* Interests (placeholder for now) */}
-          {/* <View style={styles.section}>
+            {/* Interests (placeholder for now) */}
+            {/* <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Interests</Text>
               <Text style={styles.editTag}>Edit</Text>
@@ -328,63 +341,70 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
             </TouchableOpacity>
           </View> */}
 
-          {/* Posts (from API) */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Posts</Text>
-            </View>
-
-            {isPostsLoading && (
-              <View style={styles.center}>
-                <ActivityIndicator />
-                <Text style={styles.loadingText}>Loading posts...</Text>
+            {/* Posts (from API) */}
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Posts</Text>
               </View>
-            )}
 
-            {isPostsError && !isPostsLoading && (
-              <View style={styles.center}>
-                <Text style={styles.errorText}>Failed to load posts.</Text>
-              </View>
-            )}
+              {isPostsLoading && (
+                <View style={styles.center}>
+                  <ActivityIndicator />
+                  <Text style={styles.loadingText}>Loading posts...</Text>
+                </View>
+              )}
 
-            {!isPostsLoading && !isPostsError && posts.length === 0 && (
-              <Text style={styles.subLocation}>No posts yet.</Text>
-            )}
+              {isPostsError && !isPostsLoading && (
+                <View style={styles.center}>
+                  <Text style={styles.errorText}>Failed to load posts.</Text>
+                </View>
+              )}
 
-            {!isPostsLoading && !isPostsError && posts.length > 0 && (
-              <View
-                style={{flexDirection: 'row', marginTop: 8, marginBottom: 100}}>
-                {posts.slice(0, 3).map((post, index) => {
-                  const uri = `${API_BASE_URL}/${post.image_path}`;
+              {!isPostsLoading && !isPostsError && posts.length === 0 && (
+                <Text style={{...styles.subLocation, marginBottom: 100}}>
+                  No posts yet.
+                </Text>
+              )}
 
-                  // If there are more than 3 posts, show "X+" on the last one
-                  if (index === 2 && posts.length > 3) {
-                    return (
-                      <View key={post.id} style={styles.postItem}>
-                        <Image source={{uri}} style={styles.postImage} />
-                        <View style={styles.overlay}>
-                          <Text style={styles.overlayText}>{`${
-                            posts.length - 2
-                          }+`}</Text>
+              {!isPostsLoading && !isPostsError && posts.length > 0 && (
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    marginTop: 8,
+                    marginBottom: 100,
+                  }}>
+                  {posts.slice(0, 3).map((post, index) => {
+                    const uri = `${API_BASE_URL}/${post.image_path}`;
+
+                    // If there are more than 3 posts, show "X+" on the last one
+                    if (index === 2 && posts.length > 3) {
+                      return (
+                        <View key={post.id} style={styles.postItem}>
+                          <Image source={{uri}} style={styles.postImage} />
+                          <View style={styles.overlay}>
+                            <Text style={styles.overlayText}>{`${
+                              posts.length - 2
+                            }+`}</Text>
+                          </View>
                         </View>
-                      </View>
-                    );
-                  }
+                      );
+                    }
 
-                  return (
-                    <Image
-                      key={post.id}
-                      source={{uri}}
-                      style={styles.postItem}
-                    />
-                  );
-                })}
-              </View>
-            )}
+                    return (
+                      <Image
+                        key={post.id}
+                        source={{uri}}
+                        style={styles.postItem}
+                      />
+                    );
+                  })}
+                </View>
+              )}
+            </View>
           </View>
-        </View>
-      )}
-    </ScrollView>
+        )}
+      </ScrollView>
+    </>
   );
 };
 
@@ -393,7 +413,7 @@ export default ProfileScreen;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fffafc',
+    backgroundColor: '#FFEFF5',
   },
   header: {
     alignItems: 'center',
@@ -414,6 +434,18 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 40,
     right: 16,
+  },
+  // white rounded box beneath settings icon
+  settingsIconBox: {
+    backgroundColor: '#ffffff',
+    padding: 8,
+    borderRadius: 20,
+    // subtle shadow to match soft theme
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    shadowOffset: {width: 0, height: 2},
+    elevation: 3,
   },
   toggleRow: {
     flexDirection: 'row',

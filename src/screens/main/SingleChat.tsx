@@ -8,7 +8,6 @@ import {
   TextInput,
   Image,
   Modal,
-  Switch,
   FlatList,
   KeyboardAvoidingView,
   Platform,
@@ -18,7 +17,6 @@ import {
   KeyboardEvent,
   StatusBar,
   Alert,
-  ScrollView, // ✅ added
 } from 'react-native';
 import {useFocusEffect, useRoute} from '@react-navigation/native';
 import {SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
@@ -29,11 +27,12 @@ import {
   sendMessage,
   Message,
   markConversationRead,
-  uploadMessageImage, // ✅ new
+  uploadMessageImage,
+  listenConversationMeta,
+  blockChat,
 } from '../../services/chat';
-import {blockUser} from '../../api/friends';
+import {blockUser, reportUser} from '../../api/friends';
 
-// 🔹 image picker
 import {
   launchCamera,
   launchImageLibrary,
@@ -75,9 +74,10 @@ const SingleChat = ({navigation}: {navigation: any}) => {
 
   const [popupVisible, setPopupVisible] = useState(false);
   const [mute, setMute] = useState(false);
-  const [block, setBlock] = useState(false);
-  const [blocking, setBlocking] = useState(false);
-  const [unblur, setUnblur] = useState(false);
+
+  // 🔹 Block flags
+  const [isBlocked, setIsBlocked] = useState(false); // from Firestore isBlocked
+  const [blocking, setBlocking] = useState(false); // local "Blocking..." state
 
   const [loadingInitial, setLoadingInitial] = useState(true);
   const [messagesDesc, setMessagesDesc] = useState<Message[]>([]);
@@ -100,7 +100,7 @@ const SingleChat = ({navigation}: {navigation: any}) => {
   // 🔹 full-screen image viewer
   const [fullImageUrl, setFullImageUrl] = useState<string | null>(null);
 
-  // --- Keyboard extra offset (adds a small cushion while visible) ---
+  // --- Keyboard extra offset ---
   const [kbExtra, setKbExtra] = useState(0);
   useEffect(() => {
     const SHOW = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
@@ -121,6 +121,15 @@ const SingleChat = ({navigation}: {navigation: any}) => {
     () => (Platform.OS === 'ios' ? insets.top + headerH + kbExtra : kbExtra),
     [insets.top, headerH, kbExtra],
   );
+
+  // 🔹 Listen to conversation meta for isBlocked status
+  useEffect(() => {
+    const unsub = listenConversationMeta(chatId, conv => {
+      const blocked = !!conv?.isBlocked;
+      setIsBlocked(blocked);
+    });
+    return unsub;
+  }, [chatId]);
 
   // Hide bottom tab + mark read
   useFocusEffect(
@@ -165,7 +174,7 @@ const SingleChat = ({navigation}: {navigation: any}) => {
 
   const onSend = useCallback(async () => {
     const text = input.trim();
-    if (!text || sending) return;
+    if (!text || sending || isBlocked) return; // 🔹 prevent send if blocked
     setSending(true);
     try {
       await sendMessage(myId, peerId, text);
@@ -174,7 +183,7 @@ const SingleChat = ({navigation}: {navigation: any}) => {
     } finally {
       setSending(false);
     }
-  }, [input, sending, myId, peerId, chatId]);
+  }, [input, sending, myId, peerId, chatId, isBlocked]);
 
   const onHeaderLayout = (e: LayoutChangeEvent) => {
     const h = e.nativeEvent.layout.height;
@@ -185,7 +194,7 @@ const SingleChat = ({navigation}: {navigation: any}) => {
     if (h > 0) setInputH(h);
   };
 
-  // 🔹 back button: close full-screen image first, otherwise go back
+  // back button: close full-screen image first, otherwise go back
   const handleBackPress = () => {
     if (fullImageUrl) {
       setFullImageUrl(null);
@@ -250,25 +259,23 @@ const SingleChat = ({navigation}: {navigation: any}) => {
     );
   };
 
-  // handle block toggle -> call /users/block when turned ON
-  const handleToggleBlock = useCallback(
-    async (value: boolean) => {
-      setBlock(value);
-
-      if (value && !blocking) {
-        try {
-          setBlocking(true);
-          await blockUser(peerId);
-        } catch (err) {
-          console.log('Failed to block user', err);
-          setBlock(false);
-        } finally {
-          setBlocking(false);
-        }
-      }
-    },
-    [peerId, blocking],
-  );
+  // 🔹 Block button handler:
+  // 1) call your backend blockUser()
+  // 2) if success, mark chat as blocked in Firestore via blockChat()
+  const handleBlockPress = useCallback(async () => {
+    if (isBlocked || blocking) return;
+    try {
+      setBlocking(true);
+      await blockUser(peerId); // your own API
+      await blockChat(chatId); // Firestore flag (global isBlocked=true)
+      // state will update from listenConversationMeta listener
+    } catch (err) {
+      console.log('Failed to block user', err);
+      Alert.alert('Failed to block', 'Please try again.');
+    } finally {
+      setBlocking(false);
+    }
+  }, [chatId, peerId, isBlocked, blocking]);
 
   // report dialog handlers
   const openReportDialog = () => {
@@ -285,7 +292,7 @@ const SingleChat = ({navigation}: {navigation: any}) => {
     setReportDetails('');
   };
 
-  const submitReport = () => {
+  const submitReport = async () => {
     if (!reportReason || sendingReport) return;
 
     const reasonLabel =
@@ -293,24 +300,36 @@ const SingleChat = ({navigation}: {navigation: any}) => {
       reportReason;
 
     const trimmedDetails = reportDetails.trim();
+
+    // 🔹 single string "Reason label: details" (or just "Reason label")
     const combinedText = trimmedDetails
       ? `${reasonLabel}: ${trimmedDetails}`
       : reasonLabel;
 
-    // No backend endpoint provided yet, so just show a confirmation.
-    setSendingReport(true);
-    setTimeout(() => {
-      setSendingReport(false);
+    try {
+      setSendingReport(true);
+
+      // 🔹 call backend report API
+      await reportUser(peerId, combinedText);
+
       Alert.alert(
         'Report submitted',
         'Thanks for letting us know. We will review this conversation.',
       );
       closeReportDialog();
-      console.log('User report payload:', {
+      console.log('User report payload sent:', {
         peerId,
         report_text: combinedText,
       });
-    }, 500);
+    } catch (err) {
+      console.log('Report failed', err);
+      Alert.alert(
+        'Failed to send report',
+        'Please check your connection and try again.',
+      );
+    } finally {
+      setSendingReport(false);
+    }
   };
 
   // ---------- image picker handlers ----------
@@ -366,21 +385,16 @@ const SingleChat = ({navigation}: {navigation: any}) => {
   };
 
   const handleSendImage = async () => {
-    if (!pendingImage?.uri || sendingImage) return;
+    if (!pendingImage?.uri || sendingImage || isBlocked) return; // 🔹 respect block
     try {
       setSendingImage(true);
-
-      // ✅ upload image and get URL
       const url = await uploadMessageImage({
         uri: pendingImage.uri,
         name: pendingImage.fileName ?? undefined,
         type: pendingImage.type ?? undefined,
       });
-
-      // ✅ send URL as plain text message
       await sendMessage(myId, peerId, url);
       markConversationRead(chatId, myId).catch(() => {});
-
       setImagePreviewVisible(false);
       setPendingImage(null);
     } catch (err) {
@@ -447,40 +461,52 @@ const SingleChat = ({navigation}: {navigation: any}) => {
           )}
         </View>
 
-        {/* Input bar */}
-        <View
-          style={[
-            styles.inputArea,
-            {paddingBottom: Math.max(10, insets.bottom)},
-          ]}
-          onLayout={onInputLayout}>
-          <TouchableOpacity onPress={openCameraPicker}>
-            <Icon name="camera" size={22} color="#ff4f91" />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={openGalleryPicker}>
-            <Icon name="images" size={22} color="#ff4f91" />
-          </TouchableOpacity>
-          <TextInput
-            placeholder="Aa"
-            style={styles.input}
-            value={input}
-            onChangeText={setInput}
-            multiline={false}
-            blurOnSubmit={false}
-            returnKeyType="send"
-            enablesReturnKeyAutomatically
-            onSubmitEditing={onSend}
-          />
-          <TouchableOpacity
-            onPress={onSend}
-            disabled={!input.trim() || sending}>
-            <Icon
-              name="send"
-              size={22}
-              color={input.trim() && !sending ? '#ff4f91' : '#ccc'}
+        {/* 🔹 Bottom: either input bar OR block notice */}
+        {isBlocked ? (
+          <View
+            style={[
+              styles.blockNoticeContainer,
+              {paddingBottom: Math.max(10, insets.bottom)},
+            ]}>
+            <Text style={styles.blockNoticeText}>
+              You cannot reply to this conversation.
+            </Text>
+          </View>
+        ) : (
+          <View
+            style={[
+              styles.inputArea,
+              {paddingBottom: Math.max(10, insets.bottom)},
+            ]}
+            onLayout={onInputLayout}>
+            <TouchableOpacity onPress={openCameraPicker}>
+              <Icon name="camera" size={22} color="#ff4f91" />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={openGalleryPicker}>
+              <Icon name="images" size={22} color="#ff4f91" />
+            </TouchableOpacity>
+            <TextInput
+              placeholder="Aa"
+              style={styles.input}
+              value={input}
+              onChangeText={setInput}
+              multiline={false}
+              blurOnSubmit={false}
+              returnKeyType="send"
+              enablesReturnKeyAutomatically
+              onSubmitEditing={onSend}
             />
-          </TouchableOpacity>
-        </View>
+            <TouchableOpacity
+              onPress={onSend}
+              disabled={!input.trim() || sending}>
+              <Icon
+                name="send"
+                size={22}
+                color={input.trim() && !sending ? '#ff4f91' : '#ccc'}
+              />
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* Info popup */}
         <Modal
@@ -493,14 +519,25 @@ const SingleChat = ({navigation}: {navigation: any}) => {
             activeOpacity={1}
             onPressOut={() => setPopupVisible(false)}>
             <View style={styles.popup}>
-              <View style={styles.row}>
-                <Text style={styles.text}>Block this person</Text>
-                <Switch
-                  value={block}
-                  disabled={blocking}
-                  onValueChange={handleToggleBlock}
-                />
-              </View>
+              {/* 🔹 Block this person as simple text row */}
+              <TouchableOpacity
+                style={styles.row}
+                disabled={isBlocked || blocking}
+                onPress={handleBlockPress}>
+                <Text
+                  style={[
+                    styles.blockText,
+                    (isBlocked || blocking) && styles.blockTextDisabled,
+                  ]}>
+                  {isBlocked
+                    ? 'User blocked'
+                    : blocking
+                    ? 'Blocking…'
+                    : 'Block this person'}
+                </Text>
+              </TouchableOpacity>
+
+              {/* Report row */}
               <TouchableOpacity style={styles.row} onPress={openReportDialog}>
                 <Text style={[styles.text, {color: 'red', marginLeft: 6}]}>
                   Report this person
@@ -632,14 +669,13 @@ const SingleChat = ({navigation}: {navigation: any}) => {
           </View>
         </Modal>
 
-        {/* 🔹 Full-screen image viewer with pinch-zoom (iOS + Android) */}
+        {/* 🔹 Full-screen image viewer with pinch-zoom */}
         <Modal
           visible={!!fullImageUrl}
-          transparent={true}
+          transparent
           animationType="fade"
           onRequestClose={closeFullImage}>
           <View style={styles.fullscreenContainer}>
-            {/* close button overlay */}
             <TouchableOpacity
               style={styles.fullscreenBackBtn}
               onPress={closeFullImage}>
@@ -653,7 +689,7 @@ const SingleChat = ({navigation}: {navigation: any}) => {
                 onSwipeDown={closeFullImage}
                 onCancel={closeFullImage}
                 backgroundColor="#000"
-                saveToLocalByLongPress={false} // optional: disable save dialog
+                saveToLocalByLongPress={false}
               />
             ) : null}
           </View>
@@ -881,5 +917,28 @@ const styles = StyleSheet.create({
     left: 20,
     zIndex: 10,
     padding: 8,
+  },
+
+  blockNoticeContainer: {
+    backgroundColor: '#fff4f7',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#f0c4d2',
+    paddingHorizontal: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  blockNoticeText: {
+    color: '#c0263a',
+    fontSize: 14,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+
+  blockText: {
+    fontSize: 15,
+    color: '#000', // black when active
+  },
+  blockTextDisabled: {
+    color: '#b3b3b3', // light grey when disabled
   },
 });

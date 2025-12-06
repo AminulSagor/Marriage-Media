@@ -8,6 +8,7 @@ import NearUser from '../screens/main/NearUser';
 import MatchScreen from '../screens/main/MatchScreen';
 import FilterScreen from '../screens/main/FilterScreen';
 import OtherProfileScreen from '../screens/main/OtherProfileScreen';
+import SingleChat from '../screens/main/SingleChat';
 
 const Stack = createStackNavigator();
 const HeartTab = () => {
@@ -36,6 +37,11 @@ const HeartTab = () => {
           options={{headerShown: false}}
           name="MatchScreen"
           component={MatchScreen}
+        />
+        <Stack.Screen
+          options={{headerShown: false}}
+          name="SingleChat"
+          component={SingleChat}
         />
         <Stack.Screen
           options={{headerShown: false}}

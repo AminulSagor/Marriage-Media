@@ -8,6 +8,7 @@ import NearUser from '../screens/main/NearUser';
 import MatchScreen from '../screens/main/MatchScreen';
 import OtherProfileScreen from '../screens/main/OtherProfileScreen';
 import ChatScreen from '../screens/main/ChatScreen';
+import SingleChat from '../screens/main/SingleChat';
 
 const Stack = createStackNavigator();
 const HomeTab = () => {
@@ -46,6 +47,11 @@ const HomeTab = () => {
           options={{headerShown: false}}
           name="ChatScreen"
           component={ChatScreen}
+        />
+        <Stack.Screen
+          options={{tabBarStyle: {display: 'none'}, headerShown: false}}
+          name="SingleChat"
+          component={SingleChat}
         />
       </Stack.Navigator>
     </SafeAreaView>

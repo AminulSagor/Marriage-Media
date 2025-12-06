@@ -414,6 +414,8 @@ const EditPersonalInfo: React.FC<EditPersonalInfoProps> = ({
         prefered_partner_religion_section: partnerSect || undefined,
         prefered_partner_occupation: partnerOccupation || undefined,
         prefered_partner_education: partnerEducation || undefined,
+        prefered_partner_ethnicity: partnerEthnicity || undefined,
+        prefered_partner_marital_status: partnerMaritalStatus || undefined,
       }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({queryKey: ['profile']});

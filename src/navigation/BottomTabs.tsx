@@ -47,11 +47,7 @@ const getTabBarVisibility = (route: Partial<Route<string>>) => {
 
 const BottomTabs = () => {
   return (
-    <SafeAreaView style={{flex: 1, backgroundColor: '#fff'}}>
-      <StatusBar
-        barStyle="dark-content"
-        backgroundColor={Platform.OS === 'android' ? 'white' : undefined}
-      />
+    <SafeAreaView style={{flex: 1, backgroundColor: '#FFEFF5'}}>
       <Tab.Navigator
         initialRouteName="HomeTab"
         screenOptions={({route}) => ({

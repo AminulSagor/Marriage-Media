@@ -150,6 +150,8 @@ export const registerUser = async (
       'partner_religion_section',
       'partner_occupation',
       'partner_education',
+      'prefered_partner_marital_status',
+      'prefered_partner_ethnicity',
     ];
 
     optionalScalarFields.forEach(field => {

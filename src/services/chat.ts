@@ -2,7 +2,7 @@
 import firestore, {
   FirebaseFirestoreTypes as FT,
 } from '@react-native-firebase/firestore';
-import {api} from '../api/client'; // ✅ use same axios instance/interceptor
+import {api} from '../api/client';
 import {getToken} from '../storage/secureToken';
 import axios from 'axios';
 
@@ -15,6 +15,9 @@ export type Conversation = {
   lastSenderId?: string; // "1" | "4"
   lastReads?: Record<string, FT.Timestamp | null>; // { "1": ts, "4": ts }
   unreadFor?: Record<string, boolean>; // { "1": false, "4": true }
+
+  // 🔹 NEW: simple global block flag for this conversation
+  isBlocked?: boolean;
 };
 
 export type MessageDoc = {
@@ -42,6 +45,7 @@ export const getOrCreate1to1 = async (
   const chatId = chatIdFor(me, peer);
   const ref = convoDoc(chatId);
   const snap = await ref.get();
+
   if (!snap.exists) {
     const ts = firestore.FieldValue.serverTimestamp();
     await ref.set({
@@ -51,9 +55,22 @@ export const getOrCreate1to1 = async (
       createdAt: ts as any,
       lastReads: {},
       lastSenderId: seedLastMessage ? String(me) : undefined,
-      unreadFor: {[me]: false, [peer]: !!seedLastMessage}, // seed: peer has unread if seeded
+      unreadFor: {[me]: false, [peer]: !!seedLastMessage},
+      isBlocked: false, // 🔹 initialize
     } as Conversation);
+  } else {
+    // 🔹 Backfill isBlocked if missing on older docs
+    const data = snap.data() as Conversation;
+    if (typeof data.isBlocked === 'undefined') {
+      await ref.set(
+        {
+          isBlocked: false,
+        } as Partial<Conversation>,
+        {merge: true},
+      );
+    }
   }
+
   return chatId;
 };
 
@@ -64,6 +81,22 @@ export const sendMessage = async (
 ) => {
   const chatId = chatIdFor(fromId, toId);
   const createdAt = firestore.FieldValue.serverTimestamp();
+
+  // 🔹 Safety guard: don't send if conversation is globally blocked
+  try {
+    const snap = await convoDoc(chatId).get();
+    if (snap.exists) {
+      const data = snap.data() as Conversation;
+      if (data.isBlocked) {
+        console.log('sendMessage: conversation is blocked → skipping send');
+        return;
+      }
+    }
+  } catch (e) {
+    console.log('sendMessage: block check failed, continuing', e);
+    // if you want to be strict, you can `return` here instead
+    // return;
+  }
 
   // 1) add message
   await msgsCol(chatId).add({
@@ -79,7 +112,6 @@ export const sendMessage = async (
       lastMessage: text,
       lastAt: createdAt as any,
       lastSenderId: String(fromId),
-      // toggle unread flags
       [`unreadFor.${fromId}`]: false,
       [`unreadFor.${toId}`]: true,
     } as any,
@@ -94,6 +126,40 @@ export const markConversationRead = async (chatId: string, userId: number) => {
       [`lastReads.${userId}`]: firestore.FieldValue.serverTimestamp(),
       [`unreadFor.${userId}`]: false,
     } as any,
+    {merge: true},
+  );
+};
+
+/** 🔹 Listen to conversation meta (isBlocked, unreadFor, etc.) */
+export const listenConversationMeta = (
+  chatId: string,
+  onChange: (conv: Conversation | null) => void,
+) => {
+  return convoDoc(chatId).onSnapshot(snap => {
+    if (!snap.exists) {
+      onChange(null);
+      return;
+    }
+    onChange(snap.data() as Conversation);
+  });
+};
+
+/** 🔹 Mark this chat blocked (isBlocked = true for both sides) */
+export const blockChat = async (chatId: string) => {
+  await convoDoc(chatId).set(
+    {
+      isBlocked: true,
+    } as Partial<Conversation>,
+    {merge: true},
+  );
+};
+
+/** 🔹 Mark this chat unblocked (isBlocked = false) */
+export const unblockChat = async (chatId: string) => {
+  await convoDoc(chatId).set(
+    {
+      isBlocked: false,
+    } as Partial<Conversation>,
     {merge: true},
   );
 };
@@ -150,11 +216,6 @@ type UploadMsgImgResponse = {
   img_path: string;
 };
 
-/**
- * Upload a chat image and return its URL.
- * Endpoint: /upload_img.php
- * Body: multipart/form-data with "img_path"
- */
 export const uploadMessageImage = async (file: {
   uri: string;
   name?: string;

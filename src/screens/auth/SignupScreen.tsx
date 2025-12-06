@@ -24,7 +24,7 @@ interface SignupScreenProps {
 const SignupScreen: React.FC<SignupScreenProps> = ({navigation}) => {
   const {update} = useSignupFlow();
 
-  const [username, setUsername] = useState('');
+  // const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
@@ -33,7 +33,8 @@ const SignupScreen: React.FC<SignupScreenProps> = ({navigation}) => {
 
   const handleNext = () => {
     // Basic validation for this step only
-    if (!username.trim() || !email.trim() || !phone.trim() || !password) {
+    // if (!username.trim() || !email.trim() || !phone.trim() || !password) {  <- backup
+    if (!email.trim() || !phone.trim() || !password) {
       setError('Please fill in all required fields.');
       return;
     }
@@ -48,7 +49,7 @@ const SignupScreen: React.FC<SignupScreenProps> = ({navigation}) => {
       email,
       phone,
       password,
-      name: username || undefined,
+      // name: username || undefined, <- backup
     });
 
     navigation.navigate('VerifyEmail');
@@ -74,8 +75,8 @@ const SignupScreen: React.FC<SignupScreenProps> = ({navigation}) => {
 
               {/* Form */}
               <View style={styles.inputContainer}>
-                {/* Username */}
-                <View style={styles.inputWrapper}>
+                {/* Username <- backup*/}
+                {/* <View style={styles.inputWrapper}>
                   <Image
                     source={require('../../assets/images/user.png')}
                     style={styles.iconImage}
@@ -89,7 +90,7 @@ const SignupScreen: React.FC<SignupScreenProps> = ({navigation}) => {
                     onChangeText={setUsername}
                     returnKeyType="next"
                   />
-                </View>
+                </View> */}
 
                 {/* Email */}
                 <View style={styles.inputWrapper}>

@@ -9,6 +9,7 @@ import {
   Image,
   TextInput,
   ActivityIndicator,
+  StatusBar,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import {useQuery} from '@tanstack/react-query';
@@ -339,96 +340,102 @@ const ChatScreen: React.FC<ChatScreenProps> = ({navigation}) => {
   };
 
   return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Image source={{uri: myAvatarUri}} style={styles.profilePic} />
-        {!isSearching ? (
-          <>
-            <Text style={styles.title}>Inbox ({convos.length})</Text>
-            <Icon
-              name="search-outline"
-              size={24}
-              color="#ff4081"
-              style={{marginLeft: 'auto'}}
-              onPress={() => setIsSearching(true)}
-            />
-          </>
+    <>
+      <StatusBar
+        barStyle="dark-content"
+        backgroundColor="#ffb6c9" // Android only
+      />
+      <View style={styles.container}>
+        {/* Header */}
+        <View style={styles.header}>
+          <Image source={{uri: myAvatarUri}} style={styles.profilePic} />
+          {!isSearching ? (
+            <>
+              <Text style={styles.title}>Inbox ({convos.length})</Text>
+              <Icon
+                name="search-outline"
+                size={24}
+                color="#ff4081"
+                style={{marginLeft: 'auto'}}
+                onPress={() => setIsSearching(true)}
+              />
+            </>
+          ) : (
+            <>
+              <TextInput
+                autoFocus
+                value={searchText}
+                onChangeText={setSearchText}
+                placeholder="Search by username"
+                placeholderTextColor="#888"
+                style={styles.searchInput}
+              />
+              <TouchableOpacity
+                onPress={() => {
+                  setIsSearching(false);
+                  setSearchText('');
+                }}>
+                <Icon name="close-outline" size={26} color="#ff4081" />
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
+
+        {/* Online users */}
+        <View style={styles.onlineContainer}>
+          <FlatList
+            data={friends}
+            horizontal
+            keyExtractor={f => String(f.user_id)}
+            renderItem={renderOnlineUser}
+            style={styles.onlineList}
+            contentContainerStyle={styles.onlineContent}
+            showsHorizontalScrollIndicator={false}
+            ListEmptyComponent={null}
+          />
+        </View>
+
+        <View style={styles.tag}>
+          <Text style={styles.tagText}>All Chats</Text>
+        </View>
+
+        {/* Chats list */}
+        {initialLoading ? (
+          <View style={{alignItems: 'center', paddingVertical: 16}}>
+            <ActivityIndicator />
+            <Text style={{color: '#777', marginTop: 4}}>Loading…</Text>
+          </View>
         ) : (
-          <>
-            <TextInput
-              autoFocus
-              value={searchText}
-              onChangeText={setSearchText}
-              placeholder="Search by username"
-              placeholderTextColor="#888"
-              style={styles.searchInput}
-            />
-            <TouchableOpacity
-              onPress={() => {
-                setIsSearching(false);
-                setSearchText('');
-              }}>
-              <Icon name="close-outline" size={26} color="#ff4081" />
-            </TouchableOpacity>
-          </>
+          <FlatList
+            data={filtered}
+            keyExtractor={c => c.chatId}
+            renderItem={renderConversation}
+            contentContainerStyle={{paddingBottom: 80}}
+            ListEmptyComponent={
+              <View style={{alignItems: 'center', padding: 24}}>
+                <Text style={{color: '#777'}}>No conversations yet.</Text>
+              </View>
+            }
+            onEndReachedThreshold={0.2}
+            onEndReached={loadMoreConvos}
+            ListFooterComponent={
+              loadingMore ? (
+                <View style={{paddingVertical: 12}}>
+                  <ActivityIndicator />
+                </View>
+              ) : null
+            }
+          />
         )}
       </View>
-
-      {/* Online users */}
-      <View style={styles.onlineContainer}>
-        <FlatList
-          data={friends}
-          horizontal
-          keyExtractor={f => String(f.user_id)}
-          renderItem={renderOnlineUser}
-          style={styles.onlineList}
-          contentContainerStyle={styles.onlineContent}
-          showsHorizontalScrollIndicator={false}
-          ListEmptyComponent={null}
-        />
-      </View>
-
-      <View style={styles.tag}>
-        <Text style={styles.tagText}>All Chats</Text>
-      </View>
-
-      {/* Chats list */}
-      {initialLoading ? (
-        <View style={{alignItems: 'center', paddingVertical: 16}}>
-          <ActivityIndicator />
-          <Text style={{color: '#777', marginTop: 4}}>Loading…</Text>
-        </View>
-      ) : (
-        <FlatList
-          data={filtered}
-          keyExtractor={c => c.chatId}
-          renderItem={renderConversation}
-          contentContainerStyle={{paddingBottom: 80}}
-          ListEmptyComponent={
-            <View style={{alignItems: 'center', padding: 24}}>
-              <Text style={{color: '#777'}}>No conversations yet.</Text>
-            </View>
-          }
-          onEndReachedThreshold={0.2}
-          onEndReached={loadMoreConvos}
-          ListFooterComponent={
-            loadingMore ? (
-              <View style={{paddingVertical: 12}}>
-                <ActivityIndicator />
-              </View>
-            ) : null
-          }
-        />
-      )}
-    </View>
+    </>
   );
 };
 
 export default ChatScreen;
 
 const styles = StyleSheet.create({
-  container: {flex: 1, backgroundColor: '#fff'},
+  container: {flex: 1, backgroundColor: '#FFEFF5'},
 
   header: {
     flexDirection: 'row',
@@ -477,7 +484,7 @@ const styles = StyleSheet.create({
     padding: 14,
     borderBottomWidth: 0.4,
     borderColor: '#ddd',
-    backgroundColor: '#fff',
+    backgroundColor: '#FFEFF5',
   },
   messageItemUnread: {backgroundColor: '#ffe1ec'},
   avatar: {width: 48, height: 48, borderRadius: 24},

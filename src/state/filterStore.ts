@@ -1,7 +1,8 @@
 // src/state/filterStore.ts
-// A tiny global store for filters, persisted via AsyncStorage and shared by screens.
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import {useEffect, useSyncExternalStore} from 'react';
+// Runtime-only global store for filters (no AsyncStorage).
+
+import {useSyncExternalStore} from 'react';
+import type {UserProfile} from '../api/profile';
 
 export type FilterValues = {
   gender?: 'Male' | 'Female' | 'Any';
@@ -49,10 +50,8 @@ export const DEFAULT_FILTERS: Required<FilterValues> = {
   skin: 'Any',
 };
 
-const STORAGE_KEY = 'FILTERS_V1';
-
 let filters: FilterValues = {...DEFAULT_FILTERS};
-let hydrated = false;
+let hydrated = true; // runtime-only, always true
 
 type Snapshot = {filters: FilterValues; hydrated: boolean};
 let snapshot: Snapshot = {filters, hydrated};
@@ -68,7 +67,6 @@ function updateSnapshot() {
 }
 
 export function getFilters() {
-  // ✅ stable reference unless state actually changes
   return snapshot;
 }
 
@@ -77,51 +75,106 @@ export function subscribe(listener: () => void) {
   return () => listeners.delete(listener);
 }
 
-async function persist() {
-  try {
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(filters));
-  } catch {}
-}
-
-export async function hydrateFilters() {
-  if (hydrated) return;
-  try {
-    const raw = await AsyncStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      filters = {...DEFAULT_FILTERS, ...JSON.parse(raw)};
-    }
-  } catch {}
-  hydrated = true;
-  updateSnapshot();
-}
-
 export function setFilters(next: FilterValues) {
   filters = {...filters, ...next};
-  void persist();
   updateSnapshot();
 }
 
 export function replaceFilters(next: FilterValues) {
   filters = {...DEFAULT_FILTERS, ...next};
-  void persist();
   updateSnapshot();
 }
 
 export function resetFilters() {
   filters = {...DEFAULT_FILTERS};
-  void persist();
   updateSnapshot();
+}
+
+// 🔹 Map UserProfile -> FilterValues (used by HeartScreen)
+export function mapProfileToFilters(p: UserProfile): Partial<FilterValues> {
+  const out: Partial<FilterValues> = {};
+
+  const toNum = (v: any): number | undefined => {
+    if (v === undefined || v === null || v === '') return undefined;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : undefined;
+  };
+
+  // Age range from preferred partner
+  const minAge = toNum(p.prefered_partner_age_start);
+  const maxAge = toNum(p.prefered_partner_age_end);
+  if (minAge !== undefined) out.ageMin = minAge;
+  if (maxAge !== undefined) out.ageMax = maxAge;
+
+  // Distance
+  const dist = toNum(p.prefered_partner_distance_range);
+  if (dist !== undefined) out.distance = dist;
+
+  // Country / city – fall back to user’s own if exist
+  if (p.country) out.country = p.country;
+  if (p.city) out.city = p.city;
+
+  // Marital status: use preferred first, then own
+  if (p.prefered_partner_marital_status) {
+    out.maritalStatus = p.prefered_partner_marital_status;
+  } else if (p.marital_status) {
+    out.maritalStatus = p.marital_status;
+  }
+
+  // Religion
+  if (p.prefered_partner_religion) {
+    out.religion = p.prefered_partner_religion;
+  } else if (p.religion) {
+    out.religion = p.religion;
+  }
+
+  // Ethnicity
+  if (p.prefered_partner_ethnicity) {
+    out.ethnicity = p.prefered_partner_ethnicity;
+  } else if (p.ethnicity) {
+    out.ethnicity = p.ethnicity;
+  }
+
+  // Sect
+  if (p.prefered_partner_religion_section) {
+    out.sect = p.prefered_partner_religion_section;
+  } else if (p.religion_section) {
+    out.sect = p.religion_section;
+  }
+
+  // Occupation (profession)
+  if (p.prefered_partner_occupation) {
+    out.occupation = p.prefered_partner_occupation;
+  } else if (p.profession) {
+    out.occupation = p.profession;
+  }
+
+  // Education
+  if (p.prefered_partner_education) {
+    out.education = p.prefered_partner_education;
+  } else if (p.education) {
+    out.education = p.education;
+  }
+
+  // Body / appearance – only set if user has values, otherwise keep "Any"
+  if (p.body_type) out.bodyType = p.body_type;
+  if (p.hair_color) out.hair = p.hair_color;
+  if (p.eye_color) out.eye = p.eye_color;
+  if (p.skin_color) out.skin = p.skin_color;
+
+  // gender filter: keep 'Any' for now – or you can invert user gender if you want
+  // if (p.gender?.toLowerCase() === 'male') out.gender = 'Female';
+  // if (p.gender?.toLowerCase() === 'female') out.gender = 'Male';
+
+  return out;
 }
 
 // React hook to consume the store
 export function useFilterStore() {
   const state = useSyncExternalStore(subscribe, getFilters, getFilters);
-  useEffect(() => {
-    if (!state.hydrated) void hydrateFilters();
-  }, [state.hydrated]);
   return {
     filters: state.filters,
-    hydrated: state.hydrated,
+    hydrated: state.hydrated, // always true in this runtime-only version
     set: setFilters,
     replace: replaceFilters,
     reset: resetFilters,

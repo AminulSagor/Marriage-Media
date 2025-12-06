@@ -5,6 +5,7 @@ export interface UserPost {
   user_id: number;
   image_path: string;
   caption?: string;
+  created_at?: string; // <- added
 }
 
 interface MyPostsResponse {
@@ -14,6 +15,19 @@ interface MyPostsResponse {
 
 export async function fetchMyPosts(): Promise<UserPost[]> {
   const res = await api.get<MyPostsResponse>('/posts/my');
+  return res.data.data ?? [];
+}
+
+/** ---------- OTHERS POSTS ---------- **/
+
+interface OthersPostsResponse {
+  status: string;
+  data: UserPost[];
+}
+
+/** GET /posts/others/{user_id} */
+export async function fetchOtherUserPosts(userId: number): Promise<UserPost[]> {
+  const res = await api.get<OthersPostsResponse>(`/posts/others/${userId}`);
   return res.data.data ?? [];
 }
 

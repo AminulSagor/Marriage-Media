@@ -14,6 +14,7 @@ import {
 import Swiper from 'react-native-deck-swiper';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import Feather from 'react-native-vector-icons/Feather';
+import LinearGradient from 'react-native-linear-gradient';
 import {useInfiniteQuery, useMutation, useQuery} from '@tanstack/react-query';
 
 import {
@@ -24,7 +25,11 @@ import {
 } from '../../api/friends';
 import {fetchProfile} from '../../api/profile';
 import {API_BASE_URL} from '../../config/env';
-import {useFilterStore, FilterValues} from '../../state/filterStore';
+import {
+  useFilterStore,
+  FilterValues,
+  mapProfileToFilters,
+} from '../../state/filterStore';
 
 const {width, height} = Dimensions.get('window');
 
@@ -82,12 +87,6 @@ const mapToApiParams = (
     ...(f.hair && {hair_color: f.hair}),
     ...(f.eye && {eye_color: f.eye}),
     ...(f.skin && {skin_color: f.skin}),
-    // Not in API yet (left here for future):
-    // age_min: f.ageMin,
-    // age_max: f.ageMax,
-    // distance_km: f.distance,
-    // height_cm / height_ft via height + heightUnit
-    // weight_kg / weight_lbs via weight + weightUnit
   };
   return payload;
 };
@@ -99,21 +98,33 @@ const HeartScreen = ({navigation}: {navigation: any}) => {
   const swiperRef = useRef<Swiper<CardUser> | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
 
-  // Shared persistent filters
-  const {filters, hydrated} = useFilterStore();
+  // Filters (runtime-only)
+  const {filters, hydrated, replace} = useFilterStore();
   const cleaned = useMemo(() => cleanFilters(filters), [filters]);
   const cleanedKey = useMemo(() => JSON.stringify(cleaned), [cleaned]);
 
-  // Profile (avatar)
-  const {data: me} = useQuery({
+  // 🔹 Load profile ONCE per app lifecycle
+  const {data: me, isLoading: profileLoading} = useQuery({
     queryKey: ['me-profile'],
     queryFn: fetchProfile,
+    staleTime: 1000 * 60 * 60 * 24, // 24h -> effectively "once per app session"
   });
+
+  const [initializedFromProfile, setInitializedFromProfile] = useState(false);
+
+  useEffect(() => {
+    if (!initializedFromProfile && me) {
+      const fromProfile = mapProfileToFilters(me);
+      replace(fromProfile); // seed filters from profile prefs
+      setInitializedFromProfile(true);
+    }
+  }, [me, initializedFromProfile, replace]);
+
   const myAvatarUri = me?.pro_path
     ? `${API_BASE_URL}/${me.pro_path}`
     : 'https://randomuser.me/api/portraits/men/40.jpg';
 
-  // Send-request
+  // Send-request mutation
   const sendReq = useMutation({
     mutationFn: (receiverId: number) => sendFriendRequest(receiverId),
   });
@@ -126,10 +137,11 @@ const HeartScreen = ({navigation}: {navigation: any}) => {
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
+    refetch,
   } = useInfiniteQuery({
     queryKey: ['friend-suggestions', PAGE_SIZE, cleanedKey],
     initialPageParam: 1,
-    enabled: hydrated,
+    enabled: hydrated, // hydrated is always true in our runtime store
     queryFn: async ({pageParam}) => {
       const page = pageParam as number;
       const params = mapToApiParams(cleaned, page);
@@ -182,12 +194,36 @@ const HeartScreen = ({navigation}: {navigation: any}) => {
     if (nearEnd && hasNextPage && !isFetchingNextPage) fetchNextPage();
   };
 
-  const handleDislike = () => swiperRef.current?.swipeLeft();
+  const handleDislike = () => {
+    if (!cards.length) return;
+
+    if (cards.length === 1) {
+      refetch();
+      setCurrentIndex(0);
+      return;
+    }
+
+    swiperRef.current?.swipeLeft();
+  };
 
   const handleLike = () => {
+    if (!cards.length) return;
+
     const card = cards[currentIndex];
-    if (card?.id) sendReq.mutate(card.id);
-    swiperRef.current?.swipeRight();
+    if (!card?.id) return;
+
+    sendReq.mutate(card.id, {
+      onSuccess: () => {
+        refetch();
+
+        if (cards.length === 1) {
+          setCurrentIndex(0);
+          return;
+        }
+
+        swiperRef.current?.swipeRight();
+      },
+    });
   };
 
   const openFilters = () => {
@@ -215,17 +251,7 @@ const HeartScreen = ({navigation}: {navigation: any}) => {
 
       {/* Tabs + Filters */}
       <View style={styles.subHeader}>
-        <View></View>
-        {/* <View style={styles.tabRow}>
-          {(['Flame', 'Discover', 'Premium'] as const).map(tab => (
-            <TouchableOpacity key={tab} onPress={() => setActiveTab(tab)}>
-              <Text
-                style={[styles.tabText, activeTab === tab && styles.activeTab]}>
-                {tab}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View> */}
+        <View />
         <TouchableOpacity onPress={openFilters}>
           <Feather name="sliders" size={22} color="#333" />
         </TouchableOpacity>
@@ -234,7 +260,8 @@ const HeartScreen = ({navigation}: {navigation: any}) => {
       <View style={{flex: 1}}>
         {activeTab === 'Flame' ? (
           <View style={styles.swiperContainer}>
-            {!hydrated || (isLoading && cards.length === 0) ? (
+            {(!initializedFromProfile && profileLoading) ||
+            (isLoading && cards.length === 0) ? (
               <View style={{alignItems: 'center', marginTop: 16}}>
                 <Text style={{color: '#666'}}>Loading suggestions…</Text>
               </View>
@@ -272,6 +299,10 @@ const HeartScreen = ({navigation}: {navigation: any}) => {
                       <Image
                         source={{uri: card.image}}
                         style={styles.cardImage}
+                      />
+                      <LinearGradient
+                        colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.8)']}
+                        style={styles.cardOverlay}
                       />
                       <View style={styles.cardFooter}>
                         <Text style={styles.name}>{card.name}</Text>
@@ -346,7 +377,7 @@ const HeartScreen = ({navigation}: {navigation: any}) => {
 export default HeartScreen;
 
 const styles = StyleSheet.create({
-  container: {flex: 1, backgroundColor: '#fff'},
+  container: {flex: 1, backgroundColor: '#FFEFF5'},
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -382,6 +413,14 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   cardImage: {width: '100%', height: '100%', resizeMode: 'cover'},
+  // black tint from bottom ~15% height with faded top edge
+  cardOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: '15%', // covers bottom 15% of card
+  },
   cardFooter: {position: 'absolute', bottom: 20, left: 20},
   name: {fontSize: 22, color: '#fff', fontWeight: 'bold'},
   locationRow: {flexDirection: 'row', alignItems: 'center', marginTop: 4},

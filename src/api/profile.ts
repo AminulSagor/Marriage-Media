@@ -38,6 +38,8 @@ export interface UserProfile {
   prefered_partner_religion_section?: string | null;
   prefered_partner_occupation?: string | null;
   prefered_partner_education?: string | null;
+  prefered_partner_marital_status?: string | null;
+  prefered_partner_ethnicity?: string | null;
 }
 
 interface ProfileResponse {
@@ -90,6 +92,8 @@ export interface UpdateProfilePayload {
   prefered_partner_religion_section?: string;
   prefered_partner_occupation?: string;
   prefered_partner_education?: string;
+  prefered_partner_marital_status?: string;
+  prefered_partner_ethnicity?: string;
 }
 
 export interface UpdateProfileResponse {
@@ -136,8 +140,25 @@ export async function changePassword(
   payload: ChangePasswordPayload,
 ): Promise<ChangePasswordResponse> {
   const {data} = await api.put<ChangePasswordResponse>(
-    '/change-password',
+    '/users/change-password',
     payload,
   );
+  return data;
+}
+
+/** ---------- DELETE ACCOUNT ---------- **/
+
+export interface DeleteAccountResponse {
+  status: string; // "success"
+  message: string; // "Deleted"
+}
+
+/**
+ * Permanently delete the current user account.
+ * Endpoint: /users/delete-acc
+ * Method: DELETE (no body)
+ */
+export async function deleteAccount(): Promise<DeleteAccountResponse> {
+  const {data} = await api.delete<DeleteAccountResponse>('/users/delete-acc');
   return data;
 }

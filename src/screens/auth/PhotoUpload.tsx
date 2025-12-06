@@ -22,8 +22,8 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({navigation}) => {
   const {data, update} = useSignupFlow();
 
   const [images, setImages] = useState<(any | null)[]>([null, null, null]);
-  const [blur, setBlur] = useState(false);
-  const [privacy, setPrivacy] = useState<'public' | 'private'>('public');
+  // const [blur, setBlur] = useState(false); <- backup
+  // const [privacy, setPrivacy] = useState<'public' | 'private'>('public'); <- backup
 
   const pickImage = (index: number) => {
     launchImageLibrary(
@@ -61,7 +61,7 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({navigation}) => {
       // blur_photos: blur,
       // privacy: privacy,
     });
-    navigation.navigate('FaceVerify');
+    navigation.navigate('BestMatch');
   };
 
   const renderUploadBox = (index: number, style?: any) => (
@@ -74,7 +74,7 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({navigation}) => {
         <Image
           source={{uri: (images[index] as any).uri}}
           style={styles.image}
-          blurRadius={blur ? 8 : 0}
+          // blurRadius={blur ? 8 : 0} <- backup
         />
       ) : (
         <>
@@ -96,7 +96,7 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({navigation}) => {
             <Icon name="chevron-back" size={24} color="#000" />
           </TouchableOpacity>
 
-          <TouchableOpacity
+          {/* <TouchableOpacity <- backup
             style={styles.blurToggle}
             onPress={() => setBlur(prev => !prev)}>
             <Icon
@@ -105,7 +105,7 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({navigation}) => {
               color="#f43f5e"
             />
             <Text style={styles.blurText}>Blur photos</Text>
-          </TouchableOpacity>
+          </TouchableOpacity> */}
         </View>
 
         <ScrollView
@@ -120,8 +120,8 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({navigation}) => {
           {/* Main large photo */}
           {renderUploadBox(0, styles.largeBox)}
 
-          {/* Public option */}
-          <View style={styles.radioContainer}>
+          {/* Public option <- backup*/}
+          {/* <View style={styles.radioContainer}>
             <TouchableOpacity
               style={styles.radioOption}
               onPress={() => setPrivacy('public')}>
@@ -134,7 +134,7 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({navigation}) => {
               />
               <Text style={styles.radioText}>This photo will be public</Text>
             </TouchableOpacity>
-          </View>
+          </View> */}
 
           {/* Two smaller photos */}
           <View style={styles.row}>
@@ -142,8 +142,8 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({navigation}) => {
             {renderUploadBox(2, styles.smallBox)}
           </View>
 
-          {/* Private option */}
-          <View style={styles.radioContainer}>
+          {/* Private option <- backup*/}
+          {/* <View style={styles.radioContainer}>
             <TouchableOpacity
               style={styles.radioOption}
               onPress={() => setPrivacy('private')}>
@@ -156,7 +156,7 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({navigation}) => {
               />
               <Text style={styles.radioText}>Keep these photos private</Text>
             </TouchableOpacity>
-          </View>
+          </View> */}
         </ScrollView>
 
         {/* Confirm Button pinned above bottom inset */}
@@ -190,16 +190,16 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingRight: 10,
   },
-  blurToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  blurText: {
-    marginLeft: 4,
-    fontSize: 13,
-    color: '#000',
-    fontWeight: '500',
-  },
+  // blurToggle: { <- backup
+  //   flexDirection: 'row',
+  //   alignItems: 'center',
+  // },
+  // blurText: { <- backup
+  //   marginLeft: 4,
+  //   fontSize: 13,
+  //   color: '#000',
+  //   fontWeight: '500',
+  // },
   scrollContent: {
     paddingTop: 12,
   },

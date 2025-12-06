@@ -239,14 +239,14 @@ const WeddingServicesScreen: React.FC<Props> = ({route, navigation}) => {
           )}
           <Text style={styles.cardText}>{business.services || '—'}</Text>
 
-          <View style={styles.buttonRow}>
+          {/* <View style={styles.buttonRow}>
             <TouchableOpacity style={styles.primaryBtn}>
               <Text style={styles.primaryText}>Contact Now</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.secondaryBtn}>
               <Text style={styles.secondaryText}>View Details</Text>
             </TouchableOpacity>
-          </View>
+          </View> */}
         </View>
 
         {/* Reviews header */}

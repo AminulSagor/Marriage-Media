@@ -19,6 +19,12 @@ export interface Business {
   owner_name?: string | null;
   owner_profile?: string | null; // relative path
   distance?: number; // when lat/lng supplied
+
+  // new optional fields
+  postal_code?: string | null;
+  street?: string | null;
+  email?: string | null;
+  phone?: string | null;
 }
 
 export interface GetBusinessesResponse {
@@ -139,6 +145,12 @@ export interface CreateBusinessInput {
   category: string; // required
   website?: string; // optional
 
+  // new optional fields
+  postal_code?: string;
+  street?: string;
+  email?: string;
+  phone?: string;
+
   /**
    * Image file for cover.
    * For React Native, pass { uri, name, type }.
@@ -173,6 +185,12 @@ export async function createBusinessProfile(
 
   // Optional
   if (input.website) fd.append('website', input.website);
+
+  // new optional fields
+  if (input.postal_code) fd.append('postal_code', input.postal_code);
+  if (input.street) fd.append('street', input.street);
+  if (input.email) fd.append('email', input.email);
+  if (input.phone) fd.append('phone', input.phone);
 
   // Image file (required) — API expects key `cover_path`
   const file = input.cover?.uri

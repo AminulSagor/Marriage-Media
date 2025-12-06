@@ -32,19 +32,16 @@ const ChangePasswordScreen: React.FC<ChangePasswordScreenProps> = ({
 
   const handleConfirm = async () => {
     if (!email) {
-      console.log('Missing email param for change password');
       setError('Something went wrong. Please log in again.');
       return;
     }
 
     if (!currentPassword || !newPassword || !confirmNewPassword) {
-      console.log('All password fields are required');
       setError('All password fields are required');
       return;
     }
 
     if (newPassword !== confirmNewPassword) {
-      console.log('New passwords do not match');
       setError('New passwords do not match');
       return;
     }
@@ -53,8 +50,6 @@ const ChangePasswordScreen: React.FC<ChangePasswordScreenProps> = ({
       setSubmitting(true);
       setError(null);
 
-      // TODO: call your change-password API here
-      // e.g. await changePassword(currentPassword, newPassword);
       await changePassword({
         email,
         password: currentPassword,

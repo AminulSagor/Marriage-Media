@@ -9,13 +9,16 @@ import {
   Switch,
   ImageBackground,
   Modal,
+  TextInput,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import MaterialIcon from 'react-native-vector-icons/MaterialCommunityIcons';
 import {useQuery} from '@tanstack/react-query';
 
 import {logout} from '../../api/auth';
-import {fetchProfile, UserProfile} from '../../api/profile';
+import {fetchProfile, UserProfile, deleteAccount} from '../../api/profile';
 
 import {stopPresenceIfAny} from '../../services/presence';
 
@@ -45,11 +48,16 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation, route}) => {
   });
   const profile: UserProfile | undefined = incoming ?? fetchedProfile;
 
-  const [matchNoti, setMatchNoti] = React.useState(false);
-  const [chatNoti, setChatNoti] = React.useState(false);
-  const [emailSms, setEmailSms] = React.useState(false);
+  // const [matchNoti, setMatchNoti] = React.useState(false);
+  // const [chatNoti, setChatNoti] = React.useState(false);
+  // const [emailSms, setEmailSms] = React.useState(false);
   const [logoutModal, setLogoutModal] = React.useState(false);
-  const [audioMute, setAudioMute] = React.useState(false);
+  // const [audioMute, setAudioMute] = React.useState(false);
+
+  // delete-account modal state
+  const [deleteModal, setDeleteModal] = React.useState(false);
+  const [deleteNameInput, setDeleteNameInput] = React.useState('');
+  const [deleteLoading, setDeleteLoading] = React.useState(false);
 
   const handleLogout = async () => {
     setLogoutModal(false);
@@ -61,6 +69,51 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation, route}) => {
     const rootNav = navigation.getParent()?.getParent() ?? navigation;
     rootNav.reset({index: 0, routes: [{name: 'Auth'}]});
   };
+
+  const handleConfirmDelete = async () => {
+    if (!profile?.name) {
+      Alert.alert('Error', 'Profile name not available.');
+      return;
+    }
+
+    // extra safety on name check
+    const normalizedExpected = profile.name.trim();
+    const normalizedTyped = deleteNameInput.trim();
+
+    if (normalizedTyped !== normalizedExpected) {
+      Alert.alert('Name mismatch', 'Please type your name exactly to confirm.');
+      return;
+    }
+
+    try {
+      setDeleteLoading(true);
+
+      // call API to delete account
+      await deleteAccount();
+
+      // stop presence tracking & log out locally
+      stopPresenceIfAny();
+      await logout();
+
+      const rootNav = navigation.getParent()?.getParent() ?? navigation;
+      rootNav.reset({index: 0, routes: [{name: 'Auth'}]});
+    } catch (err) {
+      console.log('deleteAccount error:', err);
+      Alert.alert(
+        'Could not delete account',
+        'Something went wrong. Please try again.',
+      );
+    } finally {
+      setDeleteLoading(false);
+      setDeleteModal(false);
+      setDeleteNameInput('');
+    }
+  };
+
+  const isDeleteDisabled =
+    !profile?.name ||
+    deleteLoading ||
+    deleteNameInput.trim() !== profile?.name.trim();
 
   // Always shows chevron and makes the whole row tappable
   const renderItem = (
@@ -206,7 +259,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation, route}) => {
               '',
               false,
               true,
-              () => navigation.navigate('BlockUnblockUsers'),
+              () =>
+                navigation.navigate('BlockUnblockUsers', {myId: profile?.id}),
             )}
             {/* {renderItem(
               <Icon name="person-circle-outline" size={20} />,
@@ -227,10 +281,10 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation, route}) => {
           </View>
 
           {/* Notifications */}
-          <Text style={styles.sectionTitle}>Notifications</Text>
+          {/* <Text style={styles.sectionTitle}>Notifications</Text> */}
           {/* Commented for now */}
-          <View style={styles.section}>
-            {/* <View style={styles.item}>
+          {/* <View style={styles.section}>
+            <View style={styles.item}>
               <View style={styles.itemLeft}>
                 <MaterialIcon name="bell-outline" size={20} />
                 <Text style={styles.itemText}>
@@ -238,7 +292,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation, route}) => {
                 </Text>
               </View>
               <Switch value={matchNoti} onValueChange={setMatchNoti} />
-            </View> */}
+            </View>
             <View style={styles.item}>
               <View style={styles.itemLeft}>
                 <MaterialIcon name="chat-outline" size={20} />
@@ -248,15 +302,14 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation, route}) => {
               </View>
               <Switch value={chatNoti} onValueChange={setChatNoti} />
             </View>
-            {/* Commented for now */}
-            {/* <View style={styles.item}>
+            <View style={styles.item}>
               <View style={styles.itemLeft}>
                 <MaterialIcon name="email-outline" size={20} />
                 <Text style={styles.itemText}>Email & SMS Alerts</Text>
               </View>
               <Switch value={emailSms} onValueChange={setEmailSms} />
-            </View> */}
-          </View>
+            </View>
+          </View> */}
 
           {/* Subscription & Payments (Commented For now)*/}
           {/* <Text style={styles.sectionTitle}>Subscription & Payments</Text>
@@ -371,7 +424,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation, route}) => {
               "Once you delete it, you can't get it back",
               true,
               true,
-              () => navigation.navigate('DeleteAccountScreen'),
+              () => setDeleteModal(true),
             )}
             {renderItem(
               <Icon name="log-out-outline" size={20} />,
@@ -400,6 +453,63 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation, route}) => {
               </TouchableOpacity>
               <TouchableOpacity style={styles.yesBtn} onPress={handleLogout}>
                 <Text style={{color: '#fff', fontWeight: '600'}}>Yes</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Delete Account Confirmation Modal */}
+      <Modal transparent visible={deleteModal} animationType="fade">
+        <View style={styles.modalContainer}>
+          <View style={[styles.modalBox, {paddingBottom: 24}]}>
+            <Text style={styles.modalTitle}>Delete your account?</Text>
+            <Text style={styles.deleteSubtitle}>
+              This action is permanent. To confirm, please type your full name
+              exactly as it appears on your profile.
+            </Text>
+
+            <Text style={styles.deleteLabel}>
+              Type&nbsp;
+              <Text style={{fontWeight: '700'}}>
+                {profile?.name ?? 'your name'}
+              </Text>
+              &nbsp;below:
+            </Text>
+
+            <TextInput
+              value={deleteNameInput}
+              onChangeText={setDeleteNameInput}
+              placeholder={profile?.name ?? 'Your full name'}
+              placeholderTextColor="#aaa"
+              style={styles.deleteInput}
+              autoCapitalize="words"
+            />
+
+            <View style={[styles.modalActions, {marginTop: 18}]}>
+              <TouchableOpacity
+                style={styles.noBtn}
+                onPress={() => {
+                  setDeleteModal(false);
+                  setDeleteNameInput('');
+                }}
+                disabled={deleteLoading}>
+                <Text style={{color: '#000', fontWeight: '600'}}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.yesBtn,
+                  styles.deleteBtn,
+                  isDeleteDisabled && {opacity: 0.6},
+                ]}
+                disabled={isDeleteDisabled}
+                onPress={handleConfirmDelete}>
+                {deleteLoading ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={{color: '#fff', fontWeight: '600'}}>Delete</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -480,5 +590,32 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 20,
     borderRadius: 10,
+  },
+  // delete dialog extras
+  deleteSubtitle: {
+    fontSize: 13,
+    color: '#555',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  deleteLabel: {
+    fontSize: 13,
+    color: '#111',
+    alignSelf: 'flex-start',
+    marginBottom: 6,
+  },
+  deleteInput: {
+    width: '100%',
+    borderWidth: 1,
+    borderColor: '#f8b4c4',
+    backgroundColor: '#fff5f7',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    fontSize: 14,
+    color: '#000',
+  },
+  deleteBtn: {
+    backgroundColor: '#ff3265', // matches app’s red/pink danger tone
   },
 });

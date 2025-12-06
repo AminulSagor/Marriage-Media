@@ -9,6 +9,7 @@ import {
   Image,
   Dimensions,
   ActivityIndicator,
+  StatusBar,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import {useQuery, useMutation, useQueryClient} from '@tanstack/react-query';
@@ -16,7 +17,7 @@ import {useQuery, useMutation, useQueryClient} from '@tanstack/react-query';
 import {
   fetchFriendRequests,
   FriendRequestItem,
-  getSendRequestList,
+  fetchSentFriendRequestList,
   SentRequestItem,
   acceptFriendRequest,
   cancelFriendOrUnfriend,
@@ -64,20 +65,20 @@ const demoUsers: NearUserItem[] = [
   },
 ];
 
+// incoming friend-requests: other user is always sender_id
 const mapIncoming = (r: FriendRequestItem): NearUserItem => ({
   id: String(r.request_id),
-  // other user = sender; fall back to request_id if backend doesn't send it
-  userId: r.user_id ?? r.sender_id ?? r.request_id,
+  userId: r.sender_id,
   name: r.name,
   image: r.pro_path
     ? `${API_BASE_URL}/${r.pro_path}`
     : 'https://randomuser.me/api/portraits/men/40.jpg',
 });
 
+// sent friend-requests: other user is always receiver_id
 const mapSent = (r: SentRequestItem): NearUserItem => ({
   id: String(r.request_id),
-  // other user = receiver; fall back to request_id if backend doesn't send it
-  userId: r.user_id ?? r.receiver_id ?? r.request_id,
+  userId: r.receiver_id,
   name: r.name,
   image: r.pro_path
     ? `${API_BASE_URL}/${r.pro_path}`
@@ -85,10 +86,7 @@ const mapSent = (r: SentRequestItem): NearUserItem => ({
 });
 
 const NearUser = ({navigation}: {navigation: any}) => {
-  const [activeTab, setActiveTab] = useState<
-    // 'Likes me' | 'Liked' | 'Passed' | 'Pings' //Commented For backup
-    'Likes me' | 'Liked'
-  >('Likes me');
+  const [activeTab, setActiveTab] = useState<'Likes me' | 'Liked'>('Likes me');
   const queryClient = useQueryClient();
 
   // current user avatar
@@ -106,31 +104,51 @@ const NearUser = ({navigation}: {navigation: any}) => {
     isLoading: incomingLoading,
     isError: incomingError,
     refetch: refetchIncoming,
-  } = useQuery({queryKey: ['friend-requests'], queryFn: fetchFriendRequests});
+  } = useQuery({
+    queryKey: ['friend-requests'],
+    queryFn: fetchFriendRequests,
+  });
 
   // Sent requests → "Liked"
   const {
-    data: sentData,
+    data: sentList = [],
     isLoading: sentLoading,
     isError: sentError,
     refetch: refetchSent,
-  } = useQuery({queryKey: ['sent-requests'], queryFn: getSendRequestList});
+  } = useQuery<SentRequestItem[]>({
+    queryKey: ['sent-requests'],
+    queryFn: fetchSentFriendRequestList,
+  });
 
-  // Accept request
+  // Accept request (by request_id)
   const acceptMut = useMutation({
     mutationFn: (requestId: number) => acceptFriendRequest(requestId),
     onSuccess: () => {
+      // ✅ Refresh incoming requests list
       queryClient.invalidateQueries({queryKey: ['friend-requests']});
+
+      // ✅ Refresh suggestions on HeartScreen (all filter variants)
+      queryClient.invalidateQueries({queryKey: ['friend-suggestions']});
+
+      // ✅ Refresh friends list on HomeScreen
+      queryClient.invalidateQueries({queryKey: ['all-friends']});
+
+      // ✅ Refresh friends list on ChatScreen
+      queryClient.invalidateQueries({queryKey: ['friends-all']});
     },
   });
 
-  // Cancel request / Unfriend
+  // Cancel request / Unfriend (by other user's id → receiver_id in API)
   const cancelMut = useMutation({
-    mutationFn: (receiverId: number) => cancelFriendOrUnfriend(receiverId),
+    mutationFn: (otherUserId: number) => cancelFriendOrUnfriend(otherUserId),
     onSuccess: () => {
-      // affects both incoming and sent lists
       queryClient.invalidateQueries({queryKey: ['friend-requests']});
       queryClient.invalidateQueries({queryKey: ['sent-requests']});
+
+      // 🔁 Keep data consistent everywhere:
+      queryClient.invalidateQueries({queryKey: ['friend-suggestions']});
+      queryClient.invalidateQueries({queryKey: ['all-friends']});
+      queryClient.invalidateQueries({queryKey: ['friends-all']});
     },
   });
 
@@ -138,7 +156,7 @@ const NearUser = ({navigation}: {navigation: any}) => {
     () => (incomingData?.data ?? []).map(mapIncoming),
     [incomingData],
   );
-  const likedUsers = useMemo(() => (sentData ?? []).map(mapSent), [sentData]);
+  const likedUsers = useMemo(() => (sentList ?? []).map(mapSent), [sentList]);
 
   const listData: NearUserItem[] =
     activeTab === 'Likes me'
@@ -146,6 +164,9 @@ const NearUser = ({navigation}: {navigation: any}) => {
       : activeTab === 'Liked'
       ? likedUsers
       : demoUsers;
+
+  const myId = (me as any)?.id as number | undefined;
+  const myName = (me as any)?.name || 'You';
 
   const renderUser = ({item}: {item: NearUserItem}) => (
     <View style={styles.userCard}>
@@ -158,13 +179,26 @@ const NearUser = ({navigation}: {navigation: any}) => {
             disabled={activeTab === 'Likes me' && acceptMut.isPending}
             onPress={() => {
               if (activeTab === 'Likes me') {
-                // accept and then navigate to match
+                if (!myId || !item.userId) {
+                  console.warn('Missing user ids for match screen');
+                  return;
+                }
+                // accept by request id
                 acceptMut.mutate(Number(item.id), {
-                  onSuccess: () => navigation?.navigate('MatchScreen'),
+                  onSuccess: () =>
+                    navigation?.navigate('MatchScreen', {
+                      currentUser: {
+                        id: myId,
+                        name: myName,
+                        avatar: myAvatarUri,
+                      },
+                      matchedUser: {
+                        id: item.userId,
+                        name: item.name,
+                        avatar: item.image,
+                      },
+                    }),
                 });
-              } else {
-                // Passed / Pings → just navigate
-                // navigation?.navigate('MatchScreen');
               }
             }}
             style={styles.checkButton}>
@@ -176,9 +210,10 @@ const NearUser = ({navigation}: {navigation: any}) => {
           style={styles.crossButton}
           disabled={cancelMut.isPending}
           onPress={() => {
-            // prefer actual userId, fall back to request id
-            const receiverId = item.userId ?? Number(item.id);
-            cancelMut.mutate(receiverId);
+            // backend expects receiver_id = other user's id
+            const otherUserId = item.userId ?? Number(item.id);
+            console.log(`CANCEL / UNFRIEND user: ${otherUserId}`);
+            cancelMut.mutate(otherUserId);
           }}>
           <Icon name="close" size={22} color="white" />
         </TouchableOpacity>
@@ -219,50 +254,51 @@ const NearUser = ({navigation}: {navigation: any}) => {
     (activeTab === 'Liked' && (sentLoading || sentError));
 
   return (
-    <View style={styles.container}>
-      {/* Top Avatar = current user */}
-      <Image source={{uri: myAvatarUri}} style={styles.topAvatar} />
+    <>
+      <StatusBar
+        barStyle="dark-content"
+        backgroundColor="#ffb6c9" // Android only
+      />
+      <View style={styles.container}>
+        {/* Top Avatar = current user */}
+        <Image source={{uri: myAvatarUri}} style={styles.topAvatar} />
 
-      {/* Tabs */}
-      <View style={styles.tabContainer}>
-        {tabs.map(tab => (
-          <TouchableOpacity
-            key={tab}
-            style={[styles.tab, activeTab === tab && styles.activeTab]}
-            onPress={() => setActiveTab(tab as any)}>
-            <Text
-              style={[
-                styles.tabText,
-                activeTab === tab && styles.activeTabText,
-              ]}>
-              {tab}
-            </Text>
-            {tab === 'Pings' && (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>2</Text>
+        {/* Tabs */}
+        <View style={styles.tabContainer}>
+          {tabs.map(tab => (
+            <TouchableOpacity
+              key={tab}
+              style={[styles.tab, activeTab === tab && styles.activeTab]}
+              onPress={() => setActiveTab(tab as any)}>
+              <Text
+                style={[
+                  styles.tabText,
+                  activeTab === tab && styles.activeTabText,
+                ]}>
+                {tab}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* List / States */}
+        {showLoaderOrError ? (
+          renderLoadingOrError()
+        ) : (
+          <FlatList
+            data={listData}
+            keyExtractor={item => item.id}
+            renderItem={renderUser}
+            contentContainerStyle={{paddingTop: 10}}
+            ListEmptyComponent={
+              <View style={{alignItems: 'center', marginTop: 16}}>
+                <Text style={{color: '#666'}}>No users to show.</Text>
               </View>
-            )}
-          </TouchableOpacity>
-        ))}
+            }
+          />
+        )}
       </View>
-
-      {/* List / States */}
-      {showLoaderOrError ? (
-        renderLoadingOrError()
-      ) : (
-        <FlatList
-          data={listData}
-          keyExtractor={item => item.id}
-          renderItem={renderUser}
-          contentContainerStyle={{paddingTop: 10}}
-          ListEmptyComponent={
-            <View style={{alignItems: 'center', marginTop: 16}}>
-              <Text style={{color: '#666'}}>No users to show.</Text>
-            </View>
-          }
-        />
-      )}
-    </View>
+    </>
   );
 };
 
@@ -299,14 +335,6 @@ const styles = StyleSheet.create({
   activeTab: {backgroundColor: '#fff'},
   tabText: {fontWeight: '600', color: '#666'},
   activeTabText: {color: '#000'},
-  badge: {
-    backgroundColor: '#FF2F6C',
-    borderRadius: 10,
-    marginLeft: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  badgeText: {color: '#fff', fontSize: 10, fontWeight: 'bold'},
   userCard: {
     backgroundColor: '#fff',
     borderRadius: 30,

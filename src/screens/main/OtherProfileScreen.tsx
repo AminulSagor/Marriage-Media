@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import {SafeAreaView} from 'react-native-safe-area-context';
@@ -20,7 +21,10 @@ import {
 } from '@react-navigation/native';
 
 import {fetchFriendProfile, cancelFriendOrUnfriend} from '../../api/friends';
+import {fetchProfile} from '../../api/profile';
 import {API_BASE_URL} from '../../config/env';
+import {getOrCreate1to1, markConversationRead} from '../../services/chat';
+import {fetchOtherUserPosts} from '../../api/posts';
 
 // If you have a concrete stack, replace ParamListBase with your RootStackParamList
 type OtherProfileRoute = RouteProp<ParamListBase, string>;
@@ -32,6 +36,13 @@ const OtherProfileScreen: React.FC = () => {
 
   const queryClient = useQueryClient();
 
+  // 🔹 logged-in user ("me")
+  const {data: me} = useQuery({
+    queryKey: ['me-profile'],
+    queryFn: fetchProfile,
+  });
+
+  // 🔹 profile of the user we are viewing
   const {
     data: profile,
     isLoading,
@@ -43,6 +54,17 @@ const OtherProfileScreen: React.FC = () => {
     enabled: !!userId,
   });
 
+  // 🔹 posts of the user we are viewing
+  const {
+    data: posts = [],
+    isLoading: loadingPosts,
+    isError: postsError,
+  } = useQuery({
+    queryKey: ['other-posts', userId],
+    queryFn: () => fetchOtherUserPosts(Number(userId)),
+    enabled: !!userId,
+  });
+
   // same API used in NearUser.tsx close button
   const unfriendMut = useMutation({
     mutationFn: (receiverId: number) => cancelFriendOrUnfriend(receiverId),
@@ -50,8 +72,6 @@ const OtherProfileScreen: React.FC = () => {
       // refresh lists that depend on friend requests / sent requests
       queryClient.invalidateQueries({queryKey: ['friend-requests']});
       queryClient.invalidateQueries({queryKey: ['sent-requests']});
-      // optional: go back after success
-      // navigation.goBack();
     },
   });
 
@@ -82,6 +102,57 @@ const OtherProfileScreen: React.FC = () => {
     ? {uri: `${API_BASE_URL}/${profile.pro_path}`}
     : {uri: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2'};
 
+  // 🔹 open/create 1-1 chat
+  const handleOpenChat = React.useCallback(async () => {
+    if (!me?.id || !userId) {
+      return;
+    }
+
+    try {
+      const chatId = await getOrCreate1to1(me.id, Number(userId));
+
+      // mark as read for me (no-op if new)
+      markConversationRead(chatId, me.id).catch(() => {});
+
+      navigation.navigate('SingleChat', {
+        chatId,
+        myId: me.id,
+        peerId: Number(userId),
+        peerName: profile?.name ?? `User ${userId}`,
+        peerAvatar: profile?.pro_path
+          ? `${API_BASE_URL}/${profile.pro_path}`
+          : 'https://placehold.co/80x80',
+      });
+    } catch (err) {
+      console.log('open chat failed', err);
+      Alert.alert('Could not open chat', 'Please try again.');
+    }
+  }, [me?.id, userId, navigation, profile?.name, profile?.pro_path]);
+
+  // 🔹 confirm before unfriend
+  const handleUnfriendPress = () => {
+    if (!userId) return;
+
+    const targetName = profile?.name || 'this user';
+
+    Alert.alert(
+      'Unfriend',
+      `Do you really want to unfriend ${targetName}?`,
+      [
+        {
+          text: 'No',
+          style: 'cancel',
+        },
+        {
+          text: 'Yes',
+          style: 'destructive',
+          onPress: () => unfriendMut.mutate(Number(userId)),
+        },
+      ],
+      {cancelable: true},
+    );
+  };
+
   if (!userId) {
     return (
       <SafeAreaView style={styles.container}>
@@ -108,7 +179,7 @@ const OtherProfileScreen: React.FC = () => {
   if (isError) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={{alignItems: 'center', marginTop: 40}}>
+        <View style={{alignItems: 'center'}}>
           <Text style={{color: '#dc2626', marginBottom: 10}}>
             Failed to load profile.
           </Text>
@@ -121,192 +192,177 @@ const OtherProfileScreen: React.FC = () => {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Profile Image */}
-        <View style={styles.imageContainer}>
-          <Image source={headerImage} style={styles.profileImage} />
+    <ScrollView showsVerticalScrollIndicator={false}>
+      {/* Profile Image */}
+      <View style={styles.imageContainer}>
+        <Image source={headerImage} style={styles.profileImage} />
 
-          {/* Back & Notification */}
-          <TouchableOpacity
-            onPress={() => navigation.goBack()}
-            style={styles.backButton}>
-            <Ionicons name="chevron-back" size={22} color="#000" />
-          </TouchableOpacity>
-          {/* (Commented For Backup)*/}
-          {/* <TouchableOpacity style={styles.notifyButton}>
-            <Ionicons name="notifications-outline" size={22} color="#000" />
-          </TouchableOpacity> */}
+        {/* Back button */}
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backButton}>
+          <Ionicons name="chevron-back" size={22} color="#000" />
+        </TouchableOpacity>
+      </View>
 
-          {/* Overlay Text Bubbles  (Commented For Backup)*/}
-          {/* <View style={styles.overlayContainer}>
-            <Text style={styles.overlayText}>
-              Looking for halal connection. You seem nice. 🌸
-            </Text>
-            <Text style={styles.overlayText}>
-              Liked your adab. Would love to chat.🌿
-            </Text>
-            <Text style={styles.overlayText}>
-              With respect—liked your profile. Salaam.✨
-            </Text>
-            <Text style={styles.overlayText}>
-              Good vibes from your profile. Salaam!
-            </Text>
-          </View> */}
-        </View>
+      {/* Action Icons*/}
+      <View style={styles.actionRow}>
+        {/* 🔹 LEFT ICON – unfriend with confirmation */}
+        <TouchableOpacity
+          style={styles.actionIcon}
+          disabled={unfriendMut.isPending}
+          onPress={handleUnfriendPress}>
+          <Image
+            source={require('../../assets/images/one.png')}
+            style={styles.actionImg}
+            resizeMode="contain"
+          />
+        </TouchableOpacity>
 
-        {/* Action Icons (no outer boxes) */}
-        <View style={styles.actionRow}>
-          {/* left icon */}
-          <TouchableOpacity style={styles.actionIcon}>
-            <Image
-              source={require('../../assets/images/one.png')}
-              style={styles.actionImg}
-              resizeMode="contain"
-            />
-          </TouchableOpacity>
+        {/* middle icon → open chat */}
+        <TouchableOpacity style={styles.actionIcon} onPress={handleOpenChat}>
+          <Image
+            source={require('../../assets/images/onee.png')}
+            style={styles.actionImg}
+            resizeMode="contain"
+          />
+        </TouchableOpacity>
 
-          {/* middle icon = HEART → calls /users/unfriend */}
-          <TouchableOpacity
-            style={styles.actionIcon}
-            disabled={unfriendMut.isPending}
-            onPress={() => unfriendMut.mutate(Number(userId))}>
-            <Image
-              source={require('../../assets/images/onee.png')}
-              style={styles.actionImg}
-              resizeMode="contain"
-            />
-          </TouchableOpacity>
+        {/* right icon commented for backup */}
+        {/* <TouchableOpacity style={styles.actionIcon}>
+          <Image
+            source={require('../../assets/images/oneee.png')}
+            style={styles.actionImg}
+            resizeMode="contain"
+          />
+        </TouchableOpacity> */}
+      </View>
 
-          {/* right icon */}
-          <TouchableOpacity style={styles.actionIcon}>
-            <Image
-              source={require('../../assets/images/oneee.png')}
-              style={styles.actionImg}
-              resizeMode="contain"
-            />
-          </TouchableOpacity>
-        </View>
+      {/* Public / Private Tabs */}
+      {/* <View style={styles.tabRow}>
+        <Text style={[styles.tabText, styles.activeTab]}>Public</Text>
+        <Text style={styles.tabText}>Private</Text>
+      </View> */}
 
-        {/* Public / Private Tabs */}
-        <View style={styles.tabRow}>
-          <Text style={[styles.tabText, styles.activeTab]}>Public</Text>
-          <Text style={styles.tabText}>Private</Text>
-        </View>
+      {/* Profile Info */}
+      <View style={styles.section}>
+        <Text style={styles.name}>{nameLine}</Text>
+        <Text style={styles.location}>📍 {locationLine}</Text>
+      </View>
 
-        {/* Profile Info */}
-        <View style={styles.section}>
-          <Text style={styles.name}>{nameLine}</Text>
-          <Text style={styles.location}>📍 {locationLine}</Text>
-        </View>
-        {/* Appearance */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Appearance</Text>
-          <View style={styles.tagRow}>
-            <Text style={styles.tag}>
-              Height : {valueOrMissing(profile?.height)}{' '}
-              {typeof profile?.height === 'number' ||
-              /[0-9]/.test(String(profile?.height))
-                ? 'cm'
-                : ''}
-            </Text>
-            <Text style={styles.tag}>
-              Weight : {valueOrMissing(profile?.weight)}{' '}
-              {typeof profile?.weight === 'number' ||
-              /[0-9]/.test(String(profile?.weight))
-                ? 'kg'
-                : ''}
-            </Text>
-          </View>
-          <View style={styles.tagRow}>
-            <Text style={styles.tag}>
-              Body : {valueOrMissing(profile?.body_type)}
-            </Text>
-            <Text style={styles.tag}>
-              Hair : {valueOrMissing(profile?.hair_color)}
-            </Text>
-          </View>
-          <View style={styles.tagRow}>
-            <Text style={styles.tag}>
-              Eye : {valueOrMissing(profile?.eye_color)}
-            </Text>
-            <Text style={styles.tag}>
-              Skin : {valueOrMissing(profile?.skin_color)}
-            </Text>
-          </View>
-        </View>
-
-        {/* Religion */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Religion details</Text>
-          <View style={styles.tagRow}>
-            <Text style={styles.tag}>{valueOrMissing(profile?.religion)}</Text>
-            <Text style={styles.tag}>
-              {valueOrMissing(profile?.religion_section)}
-            </Text>
-          </View>
+      {/* Appearance */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Appearance</Text>
+        <View style={styles.tagRow}>
           <Text style={styles.tag}>
-            Prayer: {valueOrMissing(profile?.prayer_frequency)}
+            Height : {valueOrMissing(profile?.height)}{' '}
+            {typeof profile?.height === 'number' ||
+            /[0-9]/.test(String(profile?.height))
+              ? 'cm'
+              : ''}
           </Text>
           <Text style={styles.tag}>
-            Dress code: {valueOrMissing(profile?.dress_code)}
+            Weight : {valueOrMissing(profile?.weight)}{' '}
+            {typeof profile?.weight === 'number' ||
+            /[0-9]/.test(String(profile?.weight))
+              ? 'kg'
+              : ''}
           </Text>
         </View>
-
-        {/* Personal Info */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Personal Info</Text>
-          <View style={styles.tagRow}>
-            <Text style={styles.tag}>
-              {valueOrMissing(profile?.marital_status)}
-            </Text>
-            <Text style={styles.tag}>{valueOrMissing(profile?.education)}</Text>
-          </View>
-          <Text style={styles.tag}>{valueOrMissing(profile?.profession)}</Text>
+        <View style={styles.tagRow}>
+          <Text style={styles.tag}>
+            Body : {valueOrMissing(profile?.body_type)}
+          </Text>
+          <Text style={styles.tag}>
+            Hair : {valueOrMissing(profile?.hair_color)}
+          </Text>
         </View>
-
-        {/* Preferences */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Preferences</Text>
-          <View style={styles.tagRow}>
-            <Text style={styles.tag}>Gender: {valueOrMissing(undefined)}</Text>
-            <Text style={styles.tag}>
-              Age:{' '}
-              {profile?.prefered_partner_age_start != null &&
-              profile?.prefered_partner_age_end != null
-                ? `${profile.prefered_partner_age_start}-${profile.prefered_partner_age_end}`
-                : 'Missing in api'}
-            </Text>
-          </View>
+        <View style={styles.tagRow}>
+          <Text style={styles.tag}>
+            Eye : {valueOrMissing(profile?.eye_color)}
+          </Text>
+          <Text style={styles.tag}>
+            Skin : {valueOrMissing(profile?.skin_color)}
+          </Text>
         </View>
+      </View>
 
-        {/* Posts (placeholder) */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Posts</Text>
-          <View style={styles.postRow}>
-            <Image
-              source={{uri: 'https://picsum.photos/100/100?random=1'}}
-              style={styles.postImg}
-            />
-            <Image
-              source={{uri: 'https://picsum.photos/100/100?random=2'}}
-              style={styles.postImg}
-            />
-            <Image
-              source={{uri: 'https://picsum.photos/100/100?random=3'}}
-              style={styles.postImg}
-            />
-          </View>
+      {/* Religion */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Religion details</Text>
+        <View style={styles.tagRow}>
+          <Text style={styles.tag}>{valueOrMissing(profile?.religion)}</Text>
+          <Text style={styles.tag}>
+            {valueOrMissing(profile?.religion_section)}
+          </Text>
         </View>
-      </ScrollView>
-    </SafeAreaView>
+        <Text style={styles.tag}>
+          Prayer: {valueOrMissing(profile?.prayer_frequency)}
+        </Text>
+        <Text style={styles.tag}>
+          Dress code: {valueOrMissing(profile?.dress_code)}
+        </Text>
+      </View>
+
+      {/* Personal Info */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Personal Info</Text>
+        <View style={styles.tagRow}>
+          <Text style={styles.tag}>
+            {valueOrMissing(profile?.marital_status)}
+          </Text>
+          <Text style={styles.tag}>{valueOrMissing(profile?.education)}</Text>
+        </View>
+        <Text style={styles.tag}>{valueOrMissing(profile?.profession)}</Text>
+      </View>
+
+      {/* Preferences */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Preferences</Text>
+        <View style={styles.tagRow}>
+          <Text style={styles.tag}>
+            Age:{' '}
+            {profile?.prefered_partner_age_start != null &&
+            profile?.prefered_partner_age_end != null
+              ? `${profile.prefered_partner_age_start}-${profile.prefered_partner_age_end}`
+              : 'Missing in api'}
+          </Text>
+        </View>
+      </View>
+
+      {/* Posts */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Posts</Text>
+
+        {loadingPosts ? (
+          <ActivityIndicator />
+        ) : postsError ? (
+          <Text style={styles.subText}>Could not load posts.</Text>
+        ) : posts.length === 0 ? (
+          <Text style={styles.subText}>No posts yet.</Text>
+        ) : (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.postScroll}>
+            {posts.map(post => (
+              <Image
+                key={post.id}
+                source={{uri: `${API_BASE_URL}/${post.image_path}`}}
+                style={styles.postImg}
+              />
+            ))}
+          </ScrollView>
+        )}
+      </View>
+    </ScrollView>
   );
 };
 
 export default OtherProfileScreen;
 
 const styles = StyleSheet.create({
-  container: {flex: 1, backgroundColor: '#FFEFF4'},
+  container: {flex: 1, backgroundColor: '#F0DFE3'},
   imageContainer: {position: 'relative'},
   profileImage: {
     width: 460,
@@ -391,4 +447,8 @@ const styles = StyleSheet.create({
   },
   postRow: {flexDirection: 'row', justifyContent: 'space-between'},
   postImg: {width: 100, height: 100, borderRadius: 12},
+  postScroll: {
+    flexDirection: 'row',
+    gap: 10,
+  },
 });

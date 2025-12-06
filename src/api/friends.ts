@@ -115,12 +115,9 @@ export async function sendFriendRequest(
 
 export interface FriendRequestItem {
   request_id: number;
+  sender_id: number; // from backend
   name: string;
   pro_path?: string | null; // relative path to avatar
-
-  // optional IDs if backend returns them (useful for cancel/unfriend)
-  user_id?: number;
-  sender_id?: number;
 }
 
 export interface GetFriendRequestsResponse {
@@ -148,28 +145,27 @@ export async function fetchFriendRequestList(): Promise<FriendRequestItem[]> {
 
 export interface SentRequestItem {
   request_id: number;
+  receiver_id: number; // from backend
   name: string;
   pro_path?: string | null; // relative path to avatar
-
-  // optional IDs if backend returns them (useful for cancel/unfriend)
-  user_id?: number;
-  receiver_id?: number;
 }
 
-export interface SentRequestsResponse {
+export interface GetSentFriendRequestsResponse {
   status: string; // "success"
   data: SentRequestItem[];
 }
 
-/** GET /users/sent-requests */
-export async function getSendRequests(): Promise<SentRequestsResponse> {
-  const res = await api.get<SentRequestsResponse>('/users/sent-requests');
+/** GET /users/sent-friend-requests */
+export async function fetchSentFriendRequests(): Promise<GetSentFriendRequestsResponse> {
+  const res = await api.get<GetSentFriendRequestsResponse>(
+    '/users/sent-requests',
+  );
   return res.data;
 }
 
 /** Convenience: just the array of sent requests. */
-export async function getSendRequestList(): Promise<SentRequestItem[]> {
-  const data = await getSendRequests();
+export async function fetchSentFriendRequestList(): Promise<SentRequestItem[]> {
+  const data = await fetchSentFriendRequests();
   return data.data || [];
 }
 
@@ -316,5 +312,83 @@ export async function blockUser(userId: number): Promise<BlockUserResponse> {
   console.log(`BLOCKING USER: ${userId}`);
 
   const res = await api.post<BlockUserResponse>('/users/block', payload);
+  return res.data;
+}
+
+/* =========================
+   Blocked Users List
+   ========================= */
+
+export interface BlockedUser {
+  id: number;
+  name: string;
+}
+
+export interface BlockedUsersResponse {
+  status: string; // "success"
+  data: BlockedUser[];
+}
+
+/** GET /users/blocked-users */
+export async function fetchBlockedUsers(): Promise<BlockedUser[]> {
+  const res = await api.get<BlockedUsersResponse>('/users/blocked-users');
+  return res.data.data ?? [];
+}
+
+/* =========================
+   Unblock User
+   ========================= */
+
+export interface UnblockUserBody {
+  id: number;
+}
+
+export interface UnblockUserResponse {
+  status: string; // "success"
+  message: string; // "Unblocked"
+}
+
+/** DELETE /users/unblock */
+export async function unblockUser(
+  userId: number,
+): Promise<UnblockUserResponse> {
+  const payload: UnblockUserBody = {id: userId};
+
+  console.log(`UNBLOCKING USER: ${userId}`);
+
+  const res = await api.delete<UnblockUserResponse>('/users/unblock', {
+    data: payload,
+  });
+
+  return res.data;
+}
+
+/* =========================
+   Report User
+   ========================= */
+
+export interface ReportUserBody {
+  user_id: number;
+  report: string; // "Reason: details"
+}
+
+export interface ReportUserResponse {
+  status: string; // "success"
+  message: string; // e.g. "Report submitted"
+}
+
+/** POST /users/report-user */
+export async function reportUser(
+  userId: number,
+  reportText: string,
+): Promise<ReportUserResponse> {
+  const payload: ReportUserBody = {
+    user_id: userId,
+    report: reportText,
+  };
+
+  console.log(`REPORTING USER: ${userId} | ${reportText}`);
+
+  const res = await api.post<ReportUserResponse>('/users/report', payload);
   return res.data;
 }

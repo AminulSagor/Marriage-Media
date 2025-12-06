@@ -23,16 +23,16 @@ export default function BismilaScreen({navigation}) {
           </Text>
 
           {/* Google Button */}
-          <TouchableOpacity style={[styles.button, styles.googleButton]}>
+          {/* <TouchableOpacity style={[styles.button, styles.googleButton]}>
             <Image
               source={require('../../assets/images/google.png')}
               style={styles.icon}
             />
             <Text style={styles.googleText}>Continue with Google</Text>
-          </TouchableOpacity>
+          </TouchableOpacity> */}
 
           {/* Apple Button */}
-          <TouchableOpacity style={[styles.button, styles.appleButton]}>
+          {/* <TouchableOpacity style={[styles.button, styles.appleButton]}>
             <Icon
               name="logo-apple"
               size={20}
@@ -40,10 +40,10 @@ export default function BismilaScreen({navigation}) {
               style={styles.icon}
             />
             <Text style={styles.appleText}>Continue with Apple</Text>
-          </TouchableOpacity>
+          </TouchableOpacity> */}
 
           {/* Phone Button */}
-          <TouchableOpacity style={[styles.button, styles.phoneButton]}>
+          {/* <TouchableOpacity style={[styles.button, styles.phoneButton]}>
             <Icon
               name="call-outline"
               size={20}
@@ -51,7 +51,7 @@ export default function BismilaScreen({navigation}) {
               style={styles.icon}
             />
             <Text style={styles.phoneText}>Continue with Phone</Text>
-          </TouchableOpacity>
+          </TouchableOpacity> */}
           <TouchableOpacity
             onPress={() => navigation?.navigate('LoginScreen')}
             style={styles.authButton}>
